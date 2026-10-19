@@ -1,0 +1,15 @@
+---
+# Version 1: every surface, a default, delegated UI text and path rules.
+ai18n: 1
+default: es
+respond: es
+speak: es
+document: es
+code: en
+instruct: en
+ui: delegate
+paths:
+  - match: ["**/SKILL.md", "**/skills/**"]
+    surface: instruct
+  - match: ["third_party/**"]
+    language: preserve

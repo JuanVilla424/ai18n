@@ -33,7 +33,7 @@ jobs:
       - name: Format check with Black
         run: |
           source venv/bin/activate
-          black --check scripts/
+          black --check src/ tests/
       - name: Lint with Pylint
         run: |
           source venv/bin/activate
@@ -41,7 +41,7 @@ jobs:
       - name: Run tests
         run: |
           source venv/bin/activate
-          pytest --cov=app --cov-report=xml:coverage.xml || [$? -eq 5]
+          pytest --cov=src --cov-report=xml:coverage.xml
         continue-on-error: true
       - name: List files to verify coverage.xml
         run: |
@@ -68,13 +68,4 @@ jobs:
         run: |
           ls -la scoreboard-results.json
           cat scoreboard-results.json
-        continue-on-error: true
-      - name: Upload Scorecard Results to Security Scorecards API
-        if: always()
-        run: |
-          curl -X POST \
-            "" \
-            -H "Authorization: Bearer ${{ secrets.SCORECARD_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d @scoreboard-results.json
         continue-on-error: true

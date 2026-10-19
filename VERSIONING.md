@@ -1,12 +1,19 @@
 # 📦 Versioning Strategy
 
-We follow [Semantic Versioning](https://semver.org/) with the version format `MAJOR.MINOR.PATCH`. This approach helps in managing releases and ensuring compatibility across different versions of our project.
+This repository carries two independent versions:
+
+- **The spec version** is the value of the `ai18n` key in a policy file, currently `1`. It changes
+  only when the meaning of an existing key changes. Additions that keep every existing policy valid
+  stay in the same spec version, as [SPEC.md](SPEC.md#13-versioning) describes.
+- **The repository version** covers the specification text, the schema, the reference resolver and
+  the skill together. It follows [Semantic Versioning](https://semver.org/) with the format
+  `MAJOR.MINOR.PATCH`, and `ai18n.py --version` prints it next to the spec version.
 
 ## 🧩 Version Components
 
-- **MAJOR:** Increments when you make incompatible API changes.
+- **MAJOR:** Increments when you make incompatible changes, such as a new spec version.
 - **MINOR:** Increments when you add functionality in a backward-compatible manner.
-- **PATCH:** Increments when you make backward-compatible bug fixes.
+- **PATCH:** Increments when you make backward-compatible fixes and improvements.
 
 ## 🌿 Branch Workflow
 
@@ -14,23 +21,23 @@ Our repository uses the following branches to manage the development and release
 
 1. **dev:** Active development happens here. New features and bug fixes are merged into this branch.
 2. **test:** Once features in `dev` are stable, they are promoted to `test` for further testing.
-3. **prod:** After thorough testing, changes from `test` are promoted to `prod` for production deployment.
-4. **main:** The `main` branch holds the latest production-ready code. Releases are tagged from this branch.
+3. **prod:** After thorough testing, changes from `test` are promoted to `prod`.
+4. **main:** The `main` branch holds the latest released version. Releases are tagged from this branch.
 
 ## 📝 Commit Message Guidelines
 
-To automate versioning and changelog generation, it's essential to follow specific commit message conventions. Each commit message should include one of the following [commit types](#-commit-types) and an optional scope. Additionally, include one of the [versioning keywords](#-versioning-keywords) to indicate the type of version bump.
+To automate versioning and changelog generation, every commit message follows a specific convention. Each commit message includes one of the following [commit types](#-commit-types), the `core` scope and a lower case description. Add one of the [versioning keywords](#-versioning-keywords) when the commit must start a release.
 
 ### 🗂️ Commit Message Structure
 
 ```bash
-<type>(<scope>): <description> [versioning keyword]
+<type>(core): <description> [versioning keyword]
 ```
 
 Example:
 
 ```bash
-feat(authentication): add OAuth2 support [minor candidate]
+feat(core): accept language tags with a script and a region [minor candidate]
 ```
 
 ### 🔤 Commit Types
@@ -46,7 +53,7 @@ feat(authentication): add OAuth2 support [minor candidate]
 
 ### 🔑 Versioning Keywords
 
-**Optionally** Include one of the following keywords at the end of the commit message to indicate the type of version bump:
+**Optionally** include one of the following keywords at the end of the commit message to indicate the type of version bump:
 
 - **[major candidate]** Indicates that this commit should trigger a MAJOR version bump.
 - **[minor candidate]** Indicates that this commit should trigger a MINOR version bump.
@@ -54,26 +61,26 @@ feat(authentication): add OAuth2 support [minor candidate]
 
 Examples:
 
-- `feat(authentication): add OAuth2 support [minor candidate]`
-- `fix(api): resolve authentication error [patch candidate]`
-- `refactor(core): restructure authentication module [major candidate]`
+- `feat(core): add a json rendering of the policy [minor candidate]`
+- `fix(core): reject globs that escape the policy directory [patch candidate]`
+- `refactor(core): rename the instruct surface for spec version 2 [major candidate]`
 
 ## 🚀 Release Process
 
 1. Development Phase:
    - Developers work on features and bug fixes in the `dev` branch.
-   - Commit messages should follow the guidelines above to indicate the type of changes.
+   - Commit messages follow the guidelines above to indicate the type of changes.
 
 2. Testing Phase:
-   Once a set of features is complete and stable in `dev`, they are promoted to the `test` branch.
-   Automated workflows will handle version bumps and pull requests to the next branch.
+   A commit with a versioning keyword bumps the version in `pyproject.toml` and `src/ai18n.py` on push.
+   The Version Controller workflow then opens the pull request from `dev` to `test`.
 
 3. Production Phase:
-   After successful testing in `test`, changes are promoted to the `prod` branch.
-   Final testing and validation occur here before deployment.
+   Merging that pull request opens the next one, from `test` to `prod`.
+   Final validation occurs here.
 
 4. Release:
-   - Changes from `prod` are merged into `main`.
+   - The pull request from `prod` to `main` is approved and merged by a maintainer.
    - A release is tagged, and the `CHANGELOG.md` is updated automatically based on commit messages.
 
 ## ⭐ Best Practices
@@ -87,4 +94,4 @@ Examples:
 
 ## 📜 License
 
-2026 - This project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute this software under the terms of the GPL-3.0 license. For more details, please refer to the [LICENSE](LICENSE) file included in this repository.
+2026 - This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). You are free to use, modify, and distribute this software under the terms of the Apache-2.0 license. For more details, please refer to the [LICENSE](LICENSE) file included in this repository.
