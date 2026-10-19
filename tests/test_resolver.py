@@ -52,8 +52,9 @@ def test_the_schema_is_a_valid_draft_2020_12_schema():
 
 
 def test_this_repository_uses_its_own_standard():
-    """The repository's own policy is valid and puts everything in English."""
+    """The repository's own policy, and every policy under it, is valid; everything is English."""
     assert not ai18n.check(ROOT)
+    assert not ai18n.check(ROOT, recursive=True)
     assert ai18n.resolve(ROOT / "README.md") == ("document", "en")
     assert ai18n.resolve(ROOT / "src" / "ai18n.py") == ("code", "en")
 
@@ -67,7 +68,7 @@ def test_every_example_is_valid(example):
 def test_the_monorepo_example_cascades():
     """A team policy overrides one key and inherits the rest from the monorepo root."""
     billing = ROOT / "examples" / "monorepo" / "services" / "billing"
-    assert ai18n.resolve(billing / "invoice.py") == ("code", "pt")
+    assert ai18n.resolve(billing / "invoice.py") == ("code", "pt-BR")
     assert ai18n.resolve(billing / "README.md") == ("document", "es")
     assert ai18n.resolve(billing.parent.parent / "api.py") == ("code", "en")
 
@@ -161,6 +162,49 @@ def test_a_file_without_a_policy_follows_the_session(tmp_path):
     assert ai18n.resolve(loose / "x.py", session=session) == ("code", "en")
 
 
+# ── language tags: a subset of BCP 47 ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize("tag", ["en", "es", "fil", "pt-BR", "zh-Hant", "es-419", "sr-Latn-RS"])
+def test_language_tags_follow_bcp_47(tmp_path, tag):
+    """A language code may carry a script and a region, in canonical case."""
+    repo = _repo(tmp_path, f"ai18n: 1\ncode: {tag}\n")
+    assert ai18n.resolve(repo / "x.py") == ("code", tag)
+
+
+@pytest.mark.parametrize("tag", ["pt-br", "PT", "en_US", "zh-hant", "english", "e"])
+def test_malformed_language_tags_are_rejected(tmp_path, tag):
+    """Tags outside the canonical subset are invalid."""
+    assert ai18n.check(_repo(tmp_path, f"ai18n: 1\ncode: {tag}\n"))
+
+
+def test_norwegian_must_be_quoted(tmp_path):
+    """YAML 1.1 reads a bare `no` as false, so the Norwegian tag needs quotes."""
+    assert ai18n.check(_repo(tmp_path, "ai18n: 1\ncode: no\n", folder="bare"))
+    quoted = _repo(tmp_path, 'ai18n: 1\ncode: "no"\n', folder="quoted")
+    assert ai18n.resolve(quoted / "x.py") == ("code", "no")
+
+
+# ── recursive validation ───────────────────────────────────────────────────────
+
+
+def test_a_recursive_check_finds_nested_policies_but_skips_other_repositories(tmp_path):
+    """`check --recursive` validates nested policies, never other repositories or tooling folders."""
+    repo = _repo(tmp_path, V1)
+    team = repo / "services" / "billing"
+    team.mkdir(parents=True)
+    (team / "ai18n.yaml").write_text("code: english\n", encoding="utf-8")
+    assert not ai18n.check(repo), "the plain check only looks upward"
+    assert any("billing" in problem for problem in ai18n.check(repo, recursive=True))
+    (team / "ai18n.yaml").write_text("ai18n: 1\ncode: pt\n", encoding="utf-8")
+    vendored = repo / "vendor" / "other"
+    (vendored / ".git").mkdir(parents=True)
+    (vendored / "ai18n.yaml").write_text("not: valid\n", encoding="utf-8")
+    (repo / "node_modules" / "pkg").mkdir(parents=True)
+    (repo / "node_modules" / "pkg" / "ai18n.yaml").write_text("not: valid\n", encoding="utf-8")
+    assert not ai18n.check(repo, recursive=True)
+
+
 # ── the schema only admits data ────────────────────────────────────────────────
 
 
@@ -218,6 +262,28 @@ def test_show_is_normalized_and_never_carries_comments(tmp_path):
     assert "resolve <path>" in text
 
 
+def test_show_json_is_the_same_normalized_policy_as_data(tmp_path):
+    """`show --format json` gives engines the normalized policy as data, still without comments."""
+    data = json.loads(ai18n.show(_repo(tmp_path, V1), "json"))
+    assert data["policy"] is True and data["ai18n"] == 1
+    assert data["surfaces"] == {
+        "respond": "es",
+        "speak": "es",
+        "document": "es",
+        "code": "en",
+        "instruct": "en",
+    }
+    assert data["ui"] == "delegate" and data["default"] == "es"
+    assert data["paths"][1] == {"match": ["third_party/**"], "language": "preserve"}
+    assert "must never reach a model" not in json.dumps(data)
+
+
+def test_show_json_without_a_policy(tmp_path):
+    """Without a policy the JSON says so in one field."""
+    (tmp_path / "bare" / ".git").mkdir(parents=True)
+    assert json.loads(ai18n.show(tmp_path / "bare", "json")) == {"ai18n": 1, "policy": False}
+
+
 def test_show_names_the_resolver_relative_to_the_root():
     """The rendered policy tells the agent how to call this resolver."""
     assert "python3 src/ai18n.py resolve <path>" in ai18n.show(ROOT)
@@ -265,6 +331,21 @@ def test_cli_check_and_show_exit_codes(tmp_path, capsys):
     assert ai18n.main(["check", "--root", str(bad)]) == 1
     assert ai18n.main(["show", "--root", str(bad)]) == 1
     assert "english" in capsys.readouterr().err
+
+
+def test_cli_version_recursive_check_and_json_show(tmp_path, capsys):
+    """`--version`, `check --recursive` and `show --format json` from the command line."""
+    with pytest.raises(SystemExit) as done:
+        ai18n.main(["--version"])
+    assert done.value.code == 0
+    assert f"ai18n.py {ai18n.__version__} (spec 1)" in capsys.readouterr().out
+    repo = _repo(tmp_path, V1)
+    (repo / "team").mkdir()
+    (repo / "team" / "ai18n.yaml").write_text("code: english\n", encoding="utf-8")
+    assert ai18n.main(["check", "--root", str(repo)]) == 0
+    assert ai18n.main(["check", "--root", str(repo), "--recursive"]) == 1
+    assert ai18n.main(["show", "--root", str(repo), "--format", "json"]) == 0
+    assert '"policy": true' in capsys.readouterr().out
 
 
 def test_the_script_runs_as_a_command():

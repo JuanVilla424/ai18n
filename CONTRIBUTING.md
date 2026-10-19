@@ -42,6 +42,7 @@ Please note that all participants in our project are expected to follow our [Cod
 
 - **Keep the standard consistent.** A change to the rules must update `SPEC.md`, `schema/ai18n.schema.json`, `src/ai18n.py` and `skills/ai18n/SKILL.md` together, with tests.
 - **Keep policy files data only.** Never add a key that accepts free text: it would open a prompt-injection path.
+- **Mind the spec version.** A change that keeps every existing policy file valid stays in spec version 1. A change that alters the meaning of an existing key needs a new spec version, described in [VERSIONING.md](VERSIONING.md).
 - **Lint your code** before submitting a pull request. We use [black](https://black.readthedocs.io/) and [pylint](https://www.pylint.org/).
 - Ensure **test coverage** for your code. Uncovered code may delay the approval process.
 - Write clear, concise **commit messages**.

@@ -1,4 +1,6 @@
-## 🔨 Installation
+# 📦 Installation
+
+## 🔨 Set up this repository
 
 1. **Clone the Repository**
 
@@ -26,10 +28,11 @@
 
    ```bash
    .venv/bin/pytest
-   .venv/bin/python src/ai18n.py check
+   .venv/bin/python src/ai18n.py check --recursive
+   .venv/bin/python src/ai18n.py --version
    ```
 
-## 🧩 Using ai18n from another repository
+## 🧩 Use ai18n from another repository
 
 Vendor this repository as a submodule and call the resolver from it:
 
@@ -39,4 +42,5 @@ python3 helpers/ai18n/src/ai18n.py show --root .
 ```
 
 The host repository declares the runtime dependencies of the resolver, `PyYAML` and `jsonschema`,
-in its own requirements.
+in its own requirements. The [README](README.md#-integrations) shows how to connect the resolver
+to Claude Code, OpenCode, any agent that reads `AGENTS.md`, pre-commit and CI.

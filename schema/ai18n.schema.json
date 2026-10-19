@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/JuanVilla424/ai18n/main/schema/ai18n.schema.json",
   "title": "ai18n policy",
-  "description": "ai18n.yaml: the language each surface uses, for any AI (SPEC.md). Data only: fixed keys, ISO 639-1 codes and globs. A file without the ai18n key is version 0 (a classic languages.yaml) and may only declare respond, speak, document and code.",
+  "description": "ai18n.yaml: the language each surface uses, for any AI (SPEC.md). Data only: fixed keys, language tags and globs. A file without the ai18n key is version 0 (a classic languages.yaml) and may only declare respond, speak, document and code.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -42,7 +42,11 @@
     "paths": ["ai18n"]
   },
   "$defs": {
-    "language": { "type": "string", "pattern": "^[a-z]{2}$" },
+    "language": {
+      "description": "A language tag in canonical case, a subset of BCP 47: an ISO 639 language code, then an optional ISO 15924 script and an optional ISO 3166-1 or UN M.49 region. Examples: en, es, pt-BR, zh-Hant, es-419, sr-Latn-RS.",
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
+    },
     "glob": { "type": "string", "pattern": "^[A-Za-z0-9_./*?-]{1,200}$" },
     "rule": {
       "type": "object",

@@ -14,8 +14,9 @@ reaches a model; the schema (schema/ai18n.schema.json) only admits data.
 Usage:
   ai18n.py resolve <path> [--session DIR] [--json]    surface and language of a file
   ai18n.py resolve --surface <name> [--session DIR]   language of a surface (respond, speak, ui...)
-  ai18n.py check [--root DIR]                          validate the policy files that apply to DIR
-  ai18n.py show [--root DIR]                           normalized policy, ready to inject
+  ai18n.py check [--root DIR] [--recursive]            validate the policy files of a repository
+  ai18n.py show [--root DIR] [--format text|json]      normalized policy, ready to inject
+  ai18n.py --version
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ import yaml
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import best_match
 
+__version__ = "1.0.1"
 SPEC_VERSION = 1
 SPEC_URL = "https://github.com/JuanVilla424/ai18n/blob/main/SPEC.md"
 SCHEMA_FILE = Path(__file__).resolve().parents[1] / "schema" / "ai18n.schema.json"
@@ -45,8 +47,16 @@ SURFACES = {
     "instruct": "text written for AIs: skills, agent prompts",
 }
 UI_COVERS = "user-facing UI text; delegate = each app's own i18n decides"
+DEFAULT_COVERS = "any surface the nearest policy does not declare"
 DELEGATE = "delegate"
-DOC_SUFFIXES = {".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc"}
+DOC_SUFFIXES = (".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc")
+# Folders a recursive check never enters: tooling, caches and build output, never policies.
+SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".tox", "build", "dist"}
+NO_POLICY = (
+    "# ai18n: no policy here\n\n"
+    "No ai18n.yaml or languages.yaml applies: reply in the human's language and keep each "
+    "file in the language it already uses.\n"
+)
 
 Chain = list[tuple[Path, dict]]
 
@@ -82,6 +92,18 @@ def _directories(start: Path) -> Iterator[Path]:
         if (directory / ".git").exists() or directory.parent == directory:
             return
         directory = directory.parent
+
+
+def _directories_below(root: Path) -> Iterator[Path]:
+    """`root` and every directory under it, except tooling folders and nested repositories."""
+    for current, dirnames, _ in os.walk(os.path.abspath(root)):
+        here = Path(current)
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in SKIP_DIRS and not (here / name / ".git").exists()
+        )
+        yield here
 
 
 def _policy_files(directory: Path) -> list[Path]:
@@ -168,22 +190,36 @@ def surface_language(surface: str, session: str | Path) -> str | None:
     return language_of(surface, find_chain(Path(session)))
 
 
+def normalized(chain: Chain, resolver: str = "src/ai18n.py") -> dict:
+    """The normalized policy as data: effective values only, never a comment of a policy file."""
+    if not chain:
+        return {"ai18n": SPEC_VERSION, "policy": False}
+    surfaces = {name: language_of(name, chain) for name in SURFACES}
+    return {
+        "ai18n": SPEC_VERSION,
+        "policy": True,
+        "spec": SPEC_URL,
+        "surfaces": {name: value for name, value in surfaces.items() if value is not None},
+        "ui": language_of("ui", chain),
+        "default": next((data["default"] for _, data in chain if "default" in data), None),
+        "paths": [dict(rule) for _, data in chain for rule in data.get("paths", [])],
+        "content_rule": {"document": list(DOC_SUFFIXES), "code": "any other file"},
+        "resolve": f"python3 {resolver} resolve <path>",
+    }
+
+
 def render_policy(chain: Chain, resolver: str = "src/ai18n.py") -> str:
-    """The normalized policy to inject: the values come from the files, the wording from here.
+    """The normalized policy as text to inject: values from the files, wording from here.
 
     No comment or free text of a policy file ever reaches the output."""
-    if not chain:
-        return (
-            "# ai18n: no policy here\n\n"
-            "No ai18n.yaml or languages.yaml applies: reply in the human's language and keep each "
-            "file in the language it already uses.\n"
-        )
-    rows = [(name, language_of(name, chain), covers) for name, covers in SURFACES.items()]
-    rows.append(("ui", language_of("ui", chain), UI_COVERS))
-    nearest_default = next((data["default"] for _, data in chain if "default" in data), None)
-    rows.append(("default", nearest_default, "any surface the nearest policy does not declare"))
-    declared = [(name, value, covers) for name, value, covers in rows if value is not None]
-    width = max(len(f"{name}: {value}") for name, value, _ in declared)
+    data = normalized(chain, resolver)
+    if not data["policy"]:
+        return NO_POLICY
+    rows = [(name, value, SURFACES[name]) for name, value in data["surfaces"].items()]
+    rows.append(("ui", data["ui"], UI_COVERS))
+    if data["default"] is not None:
+        rows.append(("default", data["default"], DEFAULT_COVERS))
+    width = max(len(f"{name}: {value}") for name, value, _ in rows)
     lines = [
         "# ai18n: the languages of this repository",
         "",
@@ -191,34 +227,42 @@ def render_policy(chain: Chain, resolver: str = "src/ai18n.py") -> str:
         f"old guidelines); languages.yaml is its version 0 or an alias. Spec: {SPEC_URL}",
         "",
         "```yaml",
-        *[f"{name}: {value}".ljust(width) + f"  # {covers}" for name, value, covers in declared],
+        *[f"{name}: {value}".ljust(width) + f"  # {covers}" for name, value, covers in rows],
         "```",
     ]
-    rules = [rule for _, data in chain for rule in data.get("paths", [])]
-    if rules:
+    if data["paths"]:
         lines += ["", "Path rules, tried in order (the first match wins over the content rule):"]
-        for rule in rules:
+        for rule in data["paths"]:
             target = rule.get("surface") or rule["language"]
             lines.append("- " + ", ".join(rule["match"]) + " -> " + target)
     lines += [
         "",
         "Content rule: documentation files (.md, .rst, .txt...) are `document`; any other file "
         "is `code`. `preserve` keeps the language a text already has: never translate it.",
-        f"Resolve one file: python3 {resolver} resolve <path>",
+        "Resolve one file: " + data["resolve"],
     ]
     return "\n".join(lines) + "\n"
 
 
-def show(root: str | Path) -> str:
-    """The normalized policy that applies to `root`, naming this resolver relative to it."""
+def show(root: str | Path, fmt: str = "text") -> str:
+    """The normalized policy that applies to `root`, as text or JSON, naming this resolver."""
     resolver = os.path.relpath(Path(__file__).resolve(), Path(os.path.abspath(root)))
-    return render_policy(find_chain(Path(root)), resolver)
+    chain = find_chain(Path(root))
+    if fmt == "json":
+        return json.dumps(normalized(chain, resolver), indent=2) + "\n"
+    return render_policy(chain, resolver)
 
 
-def check(root: str | Path) -> list[str]:
-    """The problems of the policy files that apply to `root`; [] when they are all valid."""
+def check(root: str | Path, recursive: bool = False) -> list[str]:
+    """The problems of the policy files that apply to `root`; [] when they are all valid.
+
+    With `recursive`, every policy file under `root` is checked too; nested repositories are
+    skipped, because they carry and check their own policy."""
+    directories = list(_directories(Path(root)))
+    if recursive:
+        directories += [d for d in _directories_below(Path(root)) if d not in directories]
     problems: list[str] = []
-    for directory in _directories(Path(root)):
+    for directory in directories:
         files = _policy_files(directory)
         if len(files) == 2 and not files[0].samefile(files[1]):
             problems.append(
@@ -239,6 +283,9 @@ def _parser() -> argparse.ArgumentParser:
         prog="ai18n.py",
         description=f"Resolve the ai18n languages of a repository for any AI ({SPEC_URL}).",
     )
+    parser.add_argument(
+        "--version", action="version", version=f"ai18n.py {__version__} (spec {SPEC_VERSION})"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     resolve_cmd = commands.add_parser(
         "resolve", help="surface and language of a file, or the language of a surface"
@@ -253,14 +300,19 @@ def _parser() -> argparse.ArgumentParser:
         help="repository whose policy applies when the file has none (default: current directory)",
     )
     resolve_cmd.add_argument("--json", action="store_true", help="print one JSON object")
-    for name, help_text in (
-        ("check", "validate the policy files that apply to a directory"),
-        ("show", "print the normalized policy, ready to inject"),
-    ):
-        command = commands.add_parser(name, help=help_text)
-        command.add_argument(
-            "--root", default=".", help="directory to start from (default: current directory)"
-        )
+    root_help = "directory to start from (default: current directory)"
+    check_cmd = commands.add_parser("check", help="validate the policy files of a repository")
+    check_cmd.add_argument("--root", default=".", help=root_help)
+    check_cmd.add_argument(
+        "--recursive",
+        action="store_true",
+        help="also check every policy file under the root, skipping nested repositories",
+    )
+    show_cmd = commands.add_parser("show", help="print the normalized policy, ready to inject")
+    show_cmd.add_argument("--root", default=".", help=root_help)
+    show_cmd.add_argument(
+        "--format", choices=("text", "json"), default="text", help="text (default) or JSON"
+    )
     return parser
 
 
@@ -282,13 +334,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{surface} {language or 'unset'}")
             return 0
         if args.command == "check":
-            problems = check(args.root)
+            problems = check(args.root, recursive=args.recursive)
             for problem in problems:
                 print(f"ai18n: {problem}", file=sys.stderr)
             if not problems:
                 print("ai18n: valid")
             return 1 if problems else 0
-        print(show(args.root), end="")
+        print(show(args.root, args.format), end="")
         return 0
     except PolicyError as exc:
         print(f"ai18n: {exc}", file=sys.stderr)

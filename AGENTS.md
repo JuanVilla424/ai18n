@@ -10,6 +10,7 @@ file. This repository uses English everywhere.
 
 ## ✅ Before you deliver
 
-- Run `pytest` and `pre-commit run --all-files`; both must pass.
+- Run `pytest`, `python3 src/ai18n.py check --recursive` and `pre-commit run --all-files`; all must
+  pass.
 - Keep `src/ai18n.py`, `schema/ai18n.schema.json`, `SPEC.md` and `skills/ai18n/SKILL.md` consistent:
   a change in one of them usually needs the same change in the others.

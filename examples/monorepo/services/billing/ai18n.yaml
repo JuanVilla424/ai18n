@@ -1,5 +1,5 @@
 ---
-# One team keeps its code in Portuguese: only that key changes here,
+# One team keeps its code in Brazilian Portuguese: only that key changes here,
 # everything else is inherited from the monorepo root.
 ai18n: 1
-code: pt
+code: pt-BR

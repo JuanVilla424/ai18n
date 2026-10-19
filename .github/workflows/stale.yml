@@ -22,7 +22,7 @@ jobs:
     - uses: actions/stale@v5
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-        stale-issue-message: 'Mmm, I ll save this one, but no important at moment, thanks!'
-        stale-pr-message: 'Looks like gods abandoned us... Damn!'
+        stale-issue-message: 'This issue has had no activity for a while. Comment to keep it open.'
+        stale-pr-message: 'This pull request has had no activity for a while. Comment or push to keep it open.'
         stale-issue-label: 'no-issue-activity'
         stale-pr-label: 'no-pr-activity'

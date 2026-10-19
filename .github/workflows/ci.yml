@@ -69,12 +69,3 @@ jobs:
           ls -la scoreboard-results.json
           cat scoreboard-results.json
         continue-on-error: true
-      - name: Upload Scorecard Results to Security Scorecards API
-        if: always()
-        run: |
-          curl -X POST \
-            "" \
-            -H "Authorization: Bearer ${{ secrets.SCORECARD_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d @scoreboard-results.json
-        continue-on-error: true

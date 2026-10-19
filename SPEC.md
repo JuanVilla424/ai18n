@@ -17,10 +17,11 @@ interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 - [7. Resolution](#7-resolution)
 - [8. Precedence](#8-precedence)
 - [9. Delivering the policy to an AI](#9-delivering-the-policy-to-an-ai)
-- [10. Conformance](#10-conformance)
-- [11. Security considerations](#11-security-considerations)
-- [12. Versioning](#12-versioning)
-- [13. Examples](#13-examples)
+- [10. Validation](#10-validation)
+- [11. Conformance](#11-conformance)
+- [12. Security considerations](#12-security-considerations)
+- [13. Versioning](#13-versioning)
+- [14. Examples](#14-examples)
 
 ## 1. Purpose
 
@@ -36,10 +37,13 @@ stay in each application's own localization files.
 
 - **Surface:** a kind of text an AI produces. Version 1 defines `respond`, `speak`, `document`,
   `code`, `instruct` and `ui`.
+- **Language tag:** the language of a surface, written as defined in [section 4](#4-keys).
 - **Policy file:** a file that declares the language of one or more surfaces.
 - **Chain:** the policy files that apply to a path, nearest first.
 - **Engine:** the software that runs an AI agent, such as a coding assistant or a CLI agent.
 - **Session repository:** the repository an AI works from.
+- **Normalized rendering:** the effective policy, produced by a resolver, that an engine gives to
+  an AI instead of the raw file.
 
 ## 3. The policy file
 
@@ -55,19 +59,24 @@ stay in each application's own localization files.
 
 ## 4. Keys
 
-| Key        | Value                  | Meaning                                                                     |
-| ---------- | ---------------------- | --------------------------------------------------------------------------- |
-| `ai18n`    | `1`                    | Spec version. Required when the file uses any version 1 key.                |
-| `respond`  | language               | Every reply to the human.                                                   |
-| `speak`    | language               | Talk the human reads or hears: personas, agent-to-agent messages, voice.    |
-| `document` | language               | Documentation for humans.                                                   |
-| `code`     | language               | Inside code: comments, docstrings, log/CLI/error messages, identifiers.     |
-| `instruct` | language               | Text written for AIs: skills, agent prompts. Version 1.                     |
-| `ui`       | language or `delegate` | User-facing UI text. `delegate`: each application's i18n decides. Version 1 |
-| `default`  | language               | The language of any surface the same file does not declare. Version 1.      |
-| `paths`    | list of rules          | Path rules, see [section 5](#5-path-rules). Version 1.                      |
+| Key        | Value                    | Meaning                                                                      |
+| ---------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `ai18n`    | `1`                      | Spec version. Required when the file uses any version 1 key.                 |
+| `respond`  | language tag             | Every reply to the human.                                                    |
+| `speak`    | language tag             | Talk the human reads or hears: personas, agent-to-agent messages, voice.     |
+| `document` | language tag             | Documentation for humans.                                                    |
+| `code`     | language tag             | Inside code: comments, docstrings, log/CLI/error messages, identifiers.      |
+| `instruct` | language tag             | Text written for AIs: skills, agent prompts. Version 1.                      |
+| `ui`       | language tag, `delegate` | User-facing UI text. `delegate`: each application's i18n decides. Version 1. |
+| `default`  | language tag             | The language of any surface the same file does not declare. Version 1.       |
+| `paths`    | list of rules            | Path rules, see [section 5](#5-path-rules). Version 1.                       |
 
-- A **language** is an ISO 639-1 code: two lowercase letters, such as `en`, `es` or `pt`.
+- A **language tag** is a subset of [BCP 47](https://www.rfc-editor.org/info/bcp47) in canonical
+  case: an ISO 639 language code of two or three lowercase letters, then an optional ISO 15924
+  script of four letters with an uppercase first letter, then an optional region of two uppercase
+  letters (ISO 3166-1) or three digits (UN M.49). Examples: `en`, `es`, `fil`, `pt-BR`, `zh-Hant`,
+  `es-419`, `sr-Latn-RS`.
+- YAML 1.1 reads a bare `no` as false. The Norwegian tag MUST be quoted: `code: "no"`.
 - Version 0 files MAY only declare `respond`, `speak`, `document` and `code`.
 - No other key is allowed.
 
@@ -76,7 +85,7 @@ stay in each application's own localization files.
 Each rule has `match`, a non-empty list of globs, and exactly one of these keys:
 
 - `surface`: the surface the matching files belong to; or
-- `language`: a language, or `preserve`.
+- `language`: a language tag, or `preserve`.
 
 `preserve` means the matching text keeps the language it already has. An AI MUST NOT translate it.
 Use it for vendored code, copies of third-party files and any text that must stay byte for byte.
@@ -131,7 +140,16 @@ than the root one.
 ## 9. Delivering the policy to an AI
 
 - Engines SHOULD inject the policy into the AI's context at session start. They MUST inject a
-  normalized rendering, such as the output of `ai18n.py show`, and MUST NOT inject the raw file.
+  normalized rendering and MUST NOT inject the raw file.
+- A normalized rendering MUST contain, for the session repository:
+  1. the effective language of every surface that resolves to one;
+  2. the value of `ui`, and the nearest `default` when one is declared;
+  3. the path rules, in the order they are tried;
+  4. the content rule and the meaning of `preserve`;
+  5. how to resolve a single file.
+- The reference resolver prints a normalized rendering as text, ready to inject, with
+  `ai18n.py show`, and as JSON with `ai18n.py show --format json` for engines that inject
+  structured context. Both carry the same values and no text of the policy file.
 - A repository SHOULD add one line to its `AGENTS.md` telling agents to resolve languages with
   ai18n. Agents that read `AGENTS.md` then find the policy without ai18n-specific support.
 - The [`ai18n` Agent Skill](skills/ai18n/SKILL.md) carries these resolution rules for engines that
@@ -139,22 +157,32 @@ than the root one.
 - Tools that verify writes SHOULD use the resolver, or an equivalent implementation of
   [section 7](#7-resolution), to know the language each file needs.
 
-## 10. Conformance
+## 10. Validation
+
+- A validator MUST check every policy file of a chain it resolves, and MUST report the ambiguity
+  of [section 3](#3-the-policy-file).
+- A repository SHOULD validate every policy file it contains, for example in CI or in a pre-commit
+  hook, with `ai18n.py check --recursive`.
+- A recursive validation MUST NOT enter a nested repository, any directory that contains `.git`
+  below the root, because a nested repository carries and validates its own policy. It SHOULD
+  skip tooling folders such as `.venv`, `node_modules` and build output.
+
+## 11. Conformance
 
 | Level | Name    | The repository or engine...                                             |
 | ----- | ------- | ----------------------------------------------------------------------- |
-| 1     | Declare | has a policy file that validates against the schema.                    |
+| 1     | Declare | has policy files that validate against the schema.                      |
 | 2     | Inject  | gives every AI that works on it the normalized policy at session start. |
 | 3     | Verify  | checks every write against the language resolved for its file.          |
 
 Each level includes the previous ones.
 
-## 11. Security considerations
+## 12. Security considerations
 
 Instruction files for AI agents are a known prompt-injection vector. ai18n limits that surface in
 three ways:
 
-- The schema admits fixed keys, ISO 639-1 codes, `preserve`, `delegate` and globs with a restricted
+- The schema admits fixed keys, language tags, `preserve`, `delegate` and globs with a restricted
   alphabet. Prose cannot fit in a valid policy file.
 - Engines inject the normalized rendering, so no comment or free text of a policy file reaches a
   model.
@@ -163,14 +191,17 @@ three ways:
 Validators MUST reject an invalid policy file instead of resolving it partially. Engines SHOULD
 treat a policy file that fails validation as absent and report the error.
 
-## 12. Versioning
+## 13. Versioning
 
 The `ai18n` key carries the spec version. Version 1 is a superset of version 0: every valid
 version 0 file is a valid version 1 policy. A future version that changes the meaning of an
 existing key will use a new number. Additions that keep every existing file valid MAY stay in
-version 1.
+version 1, as the language tags of [section 4](#4-keys) did: every two-letter code stays valid.
 
-## 13. Examples
+The spec version is independent from the version of this repository, which follows semantic
+versioning as described in [VERSIONING.md](VERSIONING.md).
+
+## 14. Examples
 
 A repository that talks to people in Spanish, keeps code in English and writes skills in English:
 
@@ -194,9 +225,9 @@ paths:
 | `.claude/skills/x/SKILL.md`   | `instruct` | `en`       | first path rule            |
 | `third_party/lib/vendored.py` | `code`     | `preserve` | second path rule           |
 
-A monorepo team that keeps its code in Portuguese adds `services/billing/ai18n.yaml` with
-`ai18n: 1` and `code: pt`. Files under `services/billing/` then use `pt` inside code and inherit
-everything else from the root. See [`examples/`](examples) for complete files.
+A monorepo team that keeps its code in Brazilian Portuguese adds `services/billing/ai18n.yaml`
+with `ai18n: 1` and `code: pt-BR`. Files under `services/billing/` then use `pt-BR` inside code and
+inherit everything else from the root. See [`examples/`](examples) for complete files.
 
 ---
 

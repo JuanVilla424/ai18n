@@ -35,10 +35,7 @@ jobs:
         run: |
           source venv/bin/activate
           pytest
-      - name: Validate the repository's own policy and the examples
+      - name: Validate every policy file, the examples included
         run: |
           source venv/bin/activate
-          python src/ai18n.py check
-          for example in examples/v0 examples/v1 examples/monorepo examples/monorepo/services/billing; do
-            python src/ai18n.py check --root "$example"
-          done
+          python src/ai18n.py check --recursive

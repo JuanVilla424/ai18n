@@ -12,7 +12,7 @@ We provide security updates for the following versions of our project:
 
 ## 🛡️ Security Practices
 
-- Policy files are data only: the schema admits fixed keys, ISO 639-1 codes and globs with a restricted alphabet, so a policy file cannot carry instructions for a model.
+- Policy files are data only: the schema admits fixed keys, language tags and globs with a restricted alphabet, so a policy file cannot carry instructions for a model.
 - Engines inject the normalized rendering of a policy, never the raw file, so comments never reach a model.
 - An invalid policy is rejected as a whole and never resolved in part.
 - Dependencies are monitored and updated to address known vulnerabilities.
