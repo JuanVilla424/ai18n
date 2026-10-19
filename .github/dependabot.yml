@@ -10,11 +10,3 @@ updates:
       prefix: "🐛 fix(deps)"
     open-pull-requests-limit: 5
     target-branch: "dev"
-  - package-ecosystem: "pip"
-    directory: "backend"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "🐛 fix(deps)"
-    open-pull-requests-limit: 5
-    target-branch: "dev"

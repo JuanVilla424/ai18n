@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Report a resolver, schema or specification problem
 title: ""
 labels: ""
 assignees: ""
@@ -9,32 +9,28 @@ assignees: ""
 **Describe the bug**
 A clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior:
+**Policy files**
+The `ai18n.yaml` or `languages.yaml` files involved, and where each one lives in the repository.
 
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+```yaml
+# ai18n.yaml
+```
+
+**Command or engine**
+The command you ran, such as `python3 src/ai18n.py resolve docs/guide.md`, or the engine that
+received the policy.
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+The surface and language you expected, and the section of SPEC.md that supports it.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behavior**
+What happened instead, including the full output or error.
 
-**Desktop (please complete the following information):**
+**Environment:**
 
-- OS: [e.g. iOS]
-- Browser [e.g. chrome, safari]
-- Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
-
-- Device: [e.g. iPhone6]
-- OS: [e.g. iOS8.1]
-- Browser [e.g. stock browser, safari]
-- Version [e.g. 22]
+- ai18n version: [output of `python3 src/ai18n.py --version`]
+- Python version: [e.g. 3.12.3]
+- OS: [e.g. Ubuntu 24.04]
 
 **Additional context**
 Add any other context about the problem here.

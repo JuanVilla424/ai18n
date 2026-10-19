@@ -1,20 +1,20 @@
 # 🔒 Security Policy
 
-Security Policy for **GitHub CICD Template** repository includes all required compliance matrix and artifact mapping.
+Security Policy for the **ai18n** repository: the specification, the JSON Schema, the reference resolver and the Agent Skill.
 
 ## 🧮 Supported Versions
 
 We provide security updates for the following versions of our project:
 
-| Version | Status      | Secure |
-| ------- | ----------- | ------ |
-| 1.0.1   | End-of-life | No     |
-| >1.0.4  | Supported   | Yes    |
+| Version | Status    | Secure |
+| ------- | --------- | ------ |
+| 1.x     | Supported | Yes    |
 
 ## 🛡️ Security Practices
 
-- We follow best practices for secure coding and infrastructure management.
-- Regular security audits and code reviews are conducted to identify and mitigate potential risks.
+- Policy files are data only: the schema admits fixed keys, language tags and globs with a restricted alphabet, so a policy file cannot carry instructions for a model.
+- Engines inject the normalized rendering of a policy, never the raw file, so comments never reach a model.
+- An invalid policy is rejected as a whole and never resolved in part.
 - Dependencies are monitored and updated to address known vulnerabilities.
 
 ## 📲 Security Updates
@@ -24,7 +24,7 @@ We provide security updates for the following versions of our project:
 
 ## 🚨 Reporting a Vulnerability
 
-If you discover a security vulnerability within this project, please follow these steps:
+If you discover a security vulnerability within this project, such as a way to make a valid policy file carry instructions to a model, please follow these steps:
 
 1. **Do not create a public issue.** Instead, contact us directly to responsibly disclose the vulnerability.
 
@@ -38,7 +38,7 @@ If you discover a security vulnerability within this project, please follow thes
 ## 🛰️ Additional Resources
 
 - [OWASP Security Guidelines](https://owasp.org/)
-- [AWS Security Best Practices](https://aws.amazon.com/security/security-best-practices/)
+- [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 
 Thank you for helping us keep this project secure!
 
@@ -46,4 +46,4 @@ Thank you for helping us keep this project secure!
 
 ## 📜 License
 
-2026 - This project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute this software under the terms of the GPL-3.0 license. For more details, please refer to the [LICENSE](LICENSE) file included in this repository.
+2026 - This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). You are free to use, modify, and distribute this software under the terms of the Apache-2.0 license. For more details, please refer to the [LICENSE](LICENSE) file included in this repository.
