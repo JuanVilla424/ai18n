@@ -1,0 +1,6 @@
+---
+# ai18n.yaml — this repository's own policy: everything in English.
+# Spec: SPEC.md. Resolve one file: python3 src/ai18n.py resolve <path>
+
+ai18n: 1
+default: en

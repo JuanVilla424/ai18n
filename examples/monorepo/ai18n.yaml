@@ -1,0 +1,5 @@
+---
+# A monorepo root: Spanish for people, English inside code.
+ai18n: 1
+default: es
+code: en

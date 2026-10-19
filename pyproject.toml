@@ -1,18 +1,16 @@
 [tool.poetry]
-name = "github-cicd-template"
-version = "1.0.17"
-description = "Github CICD Template Repository"
+name = "ai18n"
+version = "1.0.2"
+description = "ai18n: i18n for AI agents. One data-only file tells any AI which language to use for replies, voice, docs, code and instructions."
 authors = ["B <g46327wsj1.marbling129@passinbox.com>"]
-license = "Apache 2.0"
+license = "Apache-2.0"
 readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
-setuptools = ">=80.9,<83.0"
-idna = "^3.0"
-certifi = "^2025.1.31"
-bump2version = "^1.0.0"
+pyyaml = "^6.0"
+jsonschema = "^4.23"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.0.1"
@@ -22,13 +20,9 @@ isort = "^6.0.1"
 toml = "^0.10.0"
 black = ">=25.1,<27.0"
 pytest = "^8.3.1"
-httpx = { version = ">=0.24.0", optional = true }
-pytest-cov = { version = "^6.1.1", optional = true }
+pytest-cov = "^6.1.1"
 coverage = "^7.2.5"
-
-[tool.poetry.extras]
-migrations = ["alembic"]
-testing = ["pytest", "httpx"]
+bump2version = "^1.0.0"
 
 [tool.black]
 line-length = 100
@@ -47,12 +41,13 @@ exclude = '''
   | build
   | dist
   | node_modules
+  | scripts
 )/
 '''
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "--cov=app --cov-report=xml:coverage.xml --cov-report=term"
+addopts = "--cov=src --cov-report=xml:coverage.xml --cov-report=term-missing --cov-fail-under=95"
 testpaths = ["tests"]
 
 [tool.isort]
