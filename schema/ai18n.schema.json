@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/JuanVilla424/ai18n/main/schema/ai18n.schema.json",
+  "title": "ai18n policy",
+  "description": "ai18n.yaml: the language each surface uses, for any AI (SPEC.md). Data only: fixed keys, ISO 639-1 codes and globs. A file without the ai18n key is version 0 (a classic languages.yaml) and may only declare respond, speak, document and code.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ai18n": { "description": "Spec version.", "const": 1 },
+    "respond": { "$ref": "#/$defs/language", "description": "Every reply to the human." },
+    "speak": {
+      "$ref": "#/$defs/language",
+      "description": "Talk the human reads or hears: personas, agent-to-agent messages, voice."
+    },
+    "document": { "$ref": "#/$defs/language", "description": "Documentation for humans." },
+    "code": {
+      "$ref": "#/$defs/language",
+      "description": "Inside code: comments, docstrings, log/CLI/error messages, identifiers."
+    },
+    "instruct": {
+      "$ref": "#/$defs/language",
+      "description": "Text written for AIs: skills, agent prompts."
+    },
+    "ui": {
+      "description": "User-facing UI text; delegate means each app's own i18n decides.",
+      "anyOf": [{ "$ref": "#/$defs/language" }, { "const": "delegate" }]
+    },
+    "default": {
+      "$ref": "#/$defs/language",
+      "description": "Language of any surface this file does not declare."
+    },
+    "paths": {
+      "description": "Path rules, tried in order; the first match wins over the content rule.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "dependentRequired": {
+    "instruct": ["ai18n"],
+    "ui": ["ai18n"],
+    "default": ["ai18n"],
+    "paths": ["ai18n"]
+  },
+  "$defs": {
+    "language": { "type": "string", "pattern": "^[a-z]{2}$" },
+    "glob": { "type": "string", "pattern": "^[A-Za-z0-9_./*?-]{1,200}$" },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match"],
+      "properties": {
+        "match": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/glob" } },
+        "surface": { "enum": ["respond", "speak", "document", "code", "instruct"] },
+        "language": { "anyOf": [{ "$ref": "#/$defs/language" }, { "const": "preserve" }] }
+      },
+      "oneOf": [{ "required": ["surface"] }, { "required": ["language"] }]
+    }
+  }
+}

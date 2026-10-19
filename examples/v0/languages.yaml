@@ -1,0 +1,6 @@
+---
+# Version 0: the four classic keys, as many repositories already write them.
+respond: es   # replies to the human
+speak: es     # voice, personas and messages the human reads
+document: es  # documentation
+code: en      # comments, docstrings, messages and identifiers
