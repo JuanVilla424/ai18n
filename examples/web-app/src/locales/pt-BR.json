@@ -1,0 +1,11 @@
+{
+  "app": {
+    "title": "Minha loja",
+    "greeting": "Olá, {name}"
+  },
+  "cart": {
+    "empty": "Seu carrinho está vazio",
+    "items": "{count, plural, one {# produto} other {# produtos}}",
+    "total": "Total: {amount}"
+  }
+}

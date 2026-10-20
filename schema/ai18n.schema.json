@@ -33,13 +33,43 @@
       "description": "Path rules, tried in order; the first match wins over the content rule.",
       "type": "array",
       "items": { "$ref": "#/$defs/rule" }
+    },
+    "i18n": {
+      "description": "The locales the product ships to its users, and where their message catalogs live. source and fallback must be locales of the list.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "locales"],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/language",
+          "description": "Locale where new user-facing strings are written first."
+        },
+        "locales": {
+          "description": "Every locale the product ships.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/language" }
+        },
+        "fallback": {
+          "$ref": "#/$defs/language",
+          "description": "Locale the product shows when a key is missing."
+        },
+        "catalogs": {
+          "description": "Globs of the message catalogs, relative to this file; {locale} stands for each locale.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/catalog" }
+        }
+      }
     }
   },
   "dependentRequired": {
     "instruct": ["ai18n"],
     "ui": ["ai18n"],
     "default": ["ai18n"],
-    "paths": ["ai18n"]
+    "paths": ["ai18n"],
+    "i18n": ["ai18n"]
   },
   "$defs": {
     "language": {
@@ -48,6 +78,12 @@
       "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
     },
     "glob": { "type": "string", "pattern": "^[A-Za-z0-9_./*?-]{1,200}$" },
+    "catalog": {
+      "description": "A glob with exactly one {locale} token and the glob alphabet otherwise.",
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_./*?-]*\\{locale\\}[A-Za-z0-9_./*?-]*$"
+    },
     "rule": {
       "type": "object",
       "additionalProperties": false,

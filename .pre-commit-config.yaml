@@ -52,7 +52,7 @@ repos:
         entry: python src/ai18n.py check --recursive
         language: system
         pass_filenames: false
-        files: (^|/)(ai18n|languages)\.yaml$|^schema/|^src/ai18n\.py$
+        files: (^|/)(ai18n|languages)\.yaml$|^schema/|^src/ai18n\.py$|^examples/
       - id: mypy
         name: mypy
         entry: mypy
