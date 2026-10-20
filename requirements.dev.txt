@@ -1,29 +1,38 @@
-# Development dependencies: tests, linters, hooks and release tooling
+# Development dependencies: tests, linters, type checking, hooks and release tooling.
+# Exact pins, the same as pyproject.toml: tests/test_resolver.py keeps both in step.
 
 # Pre-Commit for pre-commit hooks management
-pre-commit>=4.0.0
+pre-commit==4.7.0
 
 # Pylint for python lint
-pylint>=3.3.1
+pylint==4.1.3
 
 # Yamllint for the yamllint pre-commit hook
-yamllint>=1.35.0
+yamllint==1.38.0
 
-# Poetry for package management alternative
-poetry>=2.4.1
+# Poetry to install from pyproject.toml and poetry.lock, as the CI does
+poetry==2.5.1
 
 # Bump2Version for version release control
-bump2version>=1.0.0
+bump2version==1.0.1
 
 # Toml for pyproject.toml management
-toml>=0.10.1
+toml==0.10.2
 
 # Black for Code Formatting
-black>=24.3.0
+black==26.10.1
+
+# Isort, configured in pyproject.toml
+isort==9.0.2
 
 # Pytest for Unit/Integration Testing
-pytest>=7.3.1
-pytest-cov>=4.0.0
+pytest==9.1.1
+pytest-cov==7.1.0
 
 # Coverage Reporting
-coverage>=7.2.5
+coverage==7.16.2
+
+# Mypy and stubs for the strict type checking of src/
+mypy==2.4.0
+types-PyYAML==6.0.12.20260906
+types-jsonschema==4.26.0.20261006

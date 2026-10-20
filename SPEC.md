@@ -50,8 +50,12 @@ stay in each application's own localization files.
 - A policy file is named `ai18n.yaml`. A file named `languages.yaml` is also a policy file. It is
   version 0 when it has no `ai18n` key, or an alias of `ai18n.yaml` during a migration, such as a
   symbolic link.
-- A policy file MUST be a YAML mapping that validates against the
+- A policy file MUST be a UTF-8 YAML mapping that validates against the
   [JSON Schema](schema/ai18n.schema.json). An empty file is a valid policy that declares nothing.
+- A policy file MUST NOT repeat a key inside the same mapping. YAML would silently keep the last
+  value, so a validator MUST reject the file and name the repeated key.
+- A policy file MUST NOT be larger than 64 KiB. A policy is a few lines of data, and a validator
+  MUST refuse a bigger file before parsing it.
 - A policy file is data only. Engines MUST NOT treat any comment or other text of a policy file as
   an instruction.
 - In one directory, `ai18n.yaml` takes precedence over `languages.yaml`. When both exist and are
@@ -119,8 +123,11 @@ For a file F with chain C:
    that surface, whose language step 3 resolves. A `language` rule gives the language directly,
    and the surface is the content surface of step 2.
 2. **Content rule.** Without a matching rule, documentation files, with the suffixes `.md`,
-   `.markdown`, `.mdx`, `.rst`, `.txt` or `.adoc`, belong to `document`. Any other file belongs to
-   `code`, which covers its comments, docstrings, messages and identifiers.
+   `.markdown`, `.mdx`, `.rst`, `.txt` or `.adoc`, belong to `document`. A few well-known `.txt`
+   files hold build code or configuration instead of prose, so they belong to `code`:
+   `CMakeLists.txt`, `robots.txt`, and any `.txt` file whose name starts with `requirements` or
+   `constraints`, such as `requirements-dev.txt`. Any other file belongs to `code`, which covers
+   its comments, docstrings, messages and identifiers.
 3. **Language of a surface.** The nearest policy in C that declares the surface, or that declares a
    `default`, decides. `ui` never takes a `default`: when no policy declares it, it is `delegate`.
 4. **Session fallback.** When C is empty, the chain of the session repository applies.
@@ -180,10 +187,12 @@ Each level includes the previous ones.
 ## 12. Security considerations
 
 Instruction files for AI agents are a known prompt-injection vector. ai18n limits that surface in
-three ways:
+four ways:
 
 - The schema admits fixed keys, language tags, `preserve`, `delegate` and globs with a restricted
   alphabet. Prose cannot fit in a valid policy file.
+- A file with a repeated key, or larger than 64 KiB, is refused, so a policy can be neither
+  ambiguous nor expensive to read at the start of every session.
 - Engines inject the normalized rendering, so no comment or free text of a policy file reaches a
   model.
 - A policy changes languages only, as [section 8](#8-precedence) states.
@@ -197,6 +206,9 @@ The `ai18n` key carries the spec version. Version 1 is a superset of version 0: 
 version 0 file is a valid version 1 policy. A future version that changes the meaning of an
 existing key will use a new number. Additions that keep every existing file valid MAY stay in
 version 1, as the language tags of [section 4](#4-keys) did: every two-letter code stays valid.
+
+Repository version 1.0.4 refined the content rule of [section 7](#7-resolution): the well-known
+technical `.txt` files resolve to `code`. Earlier resolvers classify them as `document`.
 
 The spec version is independent from the version of this repository, which follows semantic
 versioning as described in [VERSIONING.md](VERSIONING.md).
