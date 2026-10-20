@@ -91,7 +91,8 @@ false. The normative rules live in [SPEC.md](SPEC.md), and the schema in
 
 1. Walk up from the file to the repository root and collect every `ai18n.yaml`, nearest first.
 2. The first matching path rule wins.
-3. Otherwise documentation files are `document`, and any other file is `code`.
+3. Otherwise documentation files are `document`, and any other file is `code`, including technical
+   `.txt` files such as `requirements.txt` or `CMakeLists.txt`.
 4. For that surface, the nearest policy that declares it, or declares a `default`, decides.
 5. Without a policy of its own, a file follows the policy of the repository the AI works from.
 
@@ -286,7 +287,8 @@ expected behavior.
 
 Instruction files for AI agents are a prompt-injection vector, so ai18n keeps its own file inert.
 The schema only admits data, engines inject the normalized rendering instead of the raw file, and a
-policy can change languages only. An invalid policy is rejected as a whole, never resolved in part.
+policy can change languages only. A file with a repeated key, or larger than 64 KiB, is refused,
+and an invalid policy is rejected as a whole, never resolved in part.
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## 🗂️ Repository layout

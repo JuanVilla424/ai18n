@@ -9,7 +9,8 @@ Discovery works like EditorConfig: from a file, every policy file up to the repo
 collected, nearest first. For each surface the nearest file that declares it, or declares a
 `default`, decides; path rules are tried from the nearest file to the farthest. Engines inject the
 normalized policy that `show` prints, never the raw file, so no comment of a policy file ever
-reaches a model; the schema (schema/ai18n.schema.json) only admits data.
+reaches a model; the schema (schema/ai18n.schema.json) only admits data, and a file with a repeated
+key or more than MAX_POLICY_BYTES is rejected before anything resolves from it.
 
 Usage:
   ai18n.py resolve <path> [--session DIR] [--json]    surface and language of a file
@@ -22,12 +23,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -39,6 +42,9 @@ SPEC_URL = "https://github.com/JuanVilla424/ai18n/blob/main/SPEC.md"
 SCHEMA_FILE = Path(__file__).resolve().parents[1] / "schema" / "ai18n.schema.json"
 # In each directory the first existing name is the policy: languages.yaml is version 0 or an alias.
 POLICY_NAMES = ("ai18n.yaml", "languages.yaml")
+# A policy is a few lines of data: a bigger file is refused before it is parsed, so a hostile
+# repository cannot slow down every session that reads it.
+MAX_POLICY_BYTES = 64 * 1024
 SURFACES = {
     "respond": "every reply to the human",
     "speak": "talk the human reads or hears: personas, agent-to-agent messages, voice",
@@ -50,6 +56,9 @@ UI_COVERS = "user-facing UI text; delegate = each app's own i18n decides"
 DEFAULT_COVERS = "any surface the nearest policy does not declare"
 DELEGATE = "delegate"
 DOC_SUFFIXES = (".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc")
+# Well-known .txt files that hold build code or configuration, not prose: they are code.
+TECHNICAL_TXT_NAMES = ("CMakeLists.txt", "robots.txt")
+TECHNICAL_TXT_PREFIXES = ("requirements", "constraints")
 # Folders a recursive check never enters: tooling, caches and build output, never policies.
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".tox", "build", "dist"}
 NO_POLICY = (
@@ -58,30 +67,75 @@ NO_POLICY = (
     "file in the language it already uses.\n"
 )
 
-Chain = list[tuple[Path, dict]]
+Policy = dict[str, Any]
+Chain = list[tuple[Path, Policy]]
 
 
 class PolicyError(Exception):
     """A policy file that is not valid ai18n: unreadable, not YAML, or rejected by the schema."""
 
 
+@functools.cache
 def _validator() -> Draft202012Validator:
-    """A validator for the published JSON Schema."""
-    return Draft202012Validator(json.loads(SCHEMA_FILE.read_text(encoding="utf-8")))
+    """A validator for the published JSON Schema, loaded once per process."""
+    try:
+        schema = json.loads(SCHEMA_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PolicyError(
+            f"cannot load the ai18n schema {SCHEMA_FILE} ({exc}); restore it from the ai18n "
+            "repository"
+        ) from exc
+    return Draft202012Validator(schema)
 
 
-def load_file(path: Path) -> dict:
+def _read_policy_text(path: Path) -> str:
+    """The text of a policy file, refused when it is too big to be a policy."""
+    size = path.stat().st_size
+    if size > MAX_POLICY_BYTES:
+        raise PolicyError(
+            f"{path}: {size} bytes, more than the {MAX_POLICY_BYTES} a policy file may have"
+        )
+    return path.read_text(encoding="utf-8")
+
+
+def _reject_duplicate_keys(
+    node: yaml.Node | None, path: Path, seen: set[int] | None = None
+) -> None:
+    """Refuse a mapping that repeats a key: YAML would silently keep the last value.
+
+    `seen` holds the nodes already visited, because YAML aliases can make the node graph cyclic."""
+    seen = set() if seen is None else seen
+    if node is None or id(node) in seen:
+        return
+    seen.add(id(node))
+    if isinstance(node, yaml.MappingNode):
+        keys: set[str] = set()
+        for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                if key_node.value in keys:
+                    line = key_node.start_mark.line + 1
+                    raise PolicyError(f"{path}: line {line}: duplicate key {key_node.value!r}")
+                keys.add(key_node.value)
+            _reject_duplicate_keys(value_node, path, seen)
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            _reject_duplicate_keys(item, path, seen)
+
+
+def load_file(path: Path) -> Policy:
     """One policy file, parsed and validated against the schema."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise PolicyError(f"{path}: not readable as YAML ({exc})") from exc
+        text = _read_policy_text(path)
+        _reject_duplicate_keys(yaml.compose(text, Loader=yaml.SafeLoader), path)
+        data = yaml.safe_load(text)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise PolicyError(f"{path}: not readable as UTF-8 YAML ({exc})") from exc
     data = {} if data is None else data
     error = best_match(_validator().iter_errors(data))
     if error is not None:
         where = "/".join(str(part) for part in error.absolute_path) or "top level"
         raise PolicyError(f"{path}: {where}: {error.message}")
-    return data
+    return cast(Policy, data)
 
 
 def _directories(start: Path) -> Iterator[Path]:
@@ -128,9 +182,11 @@ def language_of(surface: str, chain: Chain) -> str | None:
     that no policy applies."""
     for _, data in chain:
         if surface in data:
-            return data[surface]
+            value: str = data[surface]
+            return value
         if surface != "ui" and "default" in data:
-            return data["default"]
+            fallback: str = data["default"]
+            return fallback
     if surface == "ui" and chain:
         return DELEGATE
     return None
@@ -159,8 +215,15 @@ def _glob_regex(pattern: str) -> re.Pattern[str]:
 
 
 def content_surface(path: Path) -> str:
-    """With no path rule the content decides: documentation, or code for any other file."""
-    return "document" if path.suffix.lower() in DOC_SUFFIXES else "code"
+    """With no path rule the content decides: documentation, or code for any other file.
+
+    A few well-known .txt files hold build code or configuration, not prose: they are code."""
+    suffix = path.suffix.lower()
+    if suffix == ".txt" and (
+        path.name in TECHNICAL_TXT_NAMES or path.name.lower().startswith(TECHNICAL_TXT_PREFIXES)
+    ):
+        return "code"
+    return "document" if suffix in DOC_SUFFIXES else "code"
 
 
 def resolve(path: str | Path, session: str | Path | None = None) -> tuple[str, str | None]:
@@ -190,11 +253,12 @@ def surface_language(surface: str, session: str | Path) -> str | None:
     return language_of(surface, find_chain(Path(session)))
 
 
-def normalized(chain: Chain, resolver: str = "src/ai18n.py") -> dict:
+def normalized(chain: Chain, resolver: str = "src/ai18n.py") -> dict[str, Any]:
     """The normalized policy as data: effective values only, never a comment of a policy file."""
     if not chain:
         return {"ai18n": SPEC_VERSION, "policy": False}
     surfaces = {name: language_of(name, chain) for name in SURFACES}
+    technical_txt = [*TECHNICAL_TXT_NAMES, *(f"{prefix}*.txt" for prefix in TECHNICAL_TXT_PREFIXES)]
     return {
         "ai18n": SPEC_VERSION,
         "policy": True,
@@ -203,7 +267,11 @@ def normalized(chain: Chain, resolver: str = "src/ai18n.py") -> dict:
         "ui": language_of("ui", chain),
         "default": next((data["default"] for _, data in chain if "default" in data), None),
         "paths": [dict(rule) for _, data in chain for rule in data.get("paths", [])],
-        "content_rule": {"document": list(DOC_SUFFIXES), "code": "any other file"},
+        "content_rule": {
+            "document": list(DOC_SUFFIXES),
+            "code_txt": technical_txt,
+            "code": "any other file",
+        },
         "resolve": f"python3 {resolver} resolve <path>",
     }
 
@@ -211,7 +279,8 @@ def normalized(chain: Chain, resolver: str = "src/ai18n.py") -> dict:
 def render_policy(chain: Chain, resolver: str = "src/ai18n.py") -> str:
     """The normalized policy as text to inject: values from the files, wording from here.
 
-    No comment or free text of a policy file ever reaches the output."""
+    No comment or free text of a policy file ever reaches the output, and every glob is quoted
+    as code so Markdown never reads its `*` as emphasis."""
     data = normalized(chain, resolver)
     if not data["policy"]:
         return NO_POLICY
@@ -234,11 +303,14 @@ def render_policy(chain: Chain, resolver: str = "src/ai18n.py") -> str:
         lines += ["", "Path rules, tried in order (the first match wins over the content rule):"]
         for rule in data["paths"]:
             target = rule.get("surface") or rule["language"]
-            lines.append("- " + ", ".join(rule["match"]) + " -> " + target)
+            globs = ", ".join(f"`{glob}`" for glob in rule["match"])
+            lines.append(f"- {globs} -> {target}")
+    technical = ", ".join(data["content_rule"]["code_txt"])
     lines += [
         "",
-        "Content rule: documentation files (.md, .rst, .txt...) are `document`; any other file "
-        "is `code`. `preserve` keeps the language a text already has: never translate it.",
+        "Content rule: documentation files (.md, .rst, .txt...) are `document`; technical .txt "
+        f"files ({technical}) and any other file are `code`. `preserve` keeps the language a "
+        "text already has: never translate it.",
         "Resolve one file: " + data["resolve"],
     ]
     return "\n".join(lines) + "\n"
@@ -317,7 +389,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the command line; 0 on success, 1 when a policy file is invalid."""
+    """Run the command line; 0 on success, 1 when a policy or the schema is invalid."""
     parser = _parser()
     args = parser.parse_args(argv)
     try:

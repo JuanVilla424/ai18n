@@ -54,6 +54,12 @@ repos:
         language: system
         pass_filenames: false
         files: (^|/)(ai18n|languages)\.yaml$|^schema/|^src/ai18n\.py$
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: validate-commit
         name: validate-commit
         entry: python scripts/control_commit/main.py --log-level=DEBUG

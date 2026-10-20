@@ -29,8 +29,9 @@ same standard. The full rules are in the spec: https://github.com/JuanVilla424/a
    directory of the policy that declares them, and the first match wins. A `surface` rule gives
    the surface; a `language` rule gives the language directly.
 3. With no matching rule, the content decides: documentation files (`.md`, `.markdown`, `.mdx`,
-   `.rst`, `.txt`, `.adoc`) are `document`; any other file is `code` for its comments, docstrings,
-   messages and identifiers.
+   `.rst`, `.txt`, `.adoc`) are `document`. The technical `.txt` files `CMakeLists.txt`,
+   `robots.txt` and those whose name starts with `requirements` or `constraints` are `code`, like
+   any other file, for their comments, docstrings, messages and identifiers.
 4. For the surface, the nearest policy that declares it, or that declares a `default`, decides.
    `ui` never takes the default.
 5. `preserve` means the text keeps the language it already has. Never translate it.
