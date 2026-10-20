@@ -1,0 +1,16 @@
+---
+# A web app for Spanish speakers that ships in Spanish, English and
+# Brazilian Portuguese: each catalog is UI text in its own locale.
+ai18n: 1
+default: es
+code: en
+instruct: en
+ui: delegate
+paths:
+  - match: ["**/SKILL.md", "**/skills/**"]
+    surface: instruct
+i18n:
+  source: es
+  locales: [es, en, pt-BR]
+  fallback: en
+  catalogs: ["src/locales/{locale}.json"]

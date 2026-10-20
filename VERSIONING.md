@@ -4,7 +4,7 @@ This repository carries two independent versions:
 
 - **The spec version** is the value of the `ai18n` key in a policy file, currently `1`. It changes
   only when the meaning of an existing key changes. Additions that keep every existing policy valid
-  stay in the same spec version, as [SPEC.md](SPEC.md#13-versioning) describes.
+  stay in the same spec version, as [SPEC.md](SPEC.md#14-versioning) describes.
 - **The repository version** covers the specification text, the schema, the reference resolver and
   the skill together. It follows [Semantic Versioning](https://semver.org/) with the format
   `MAJOR.MINOR.PATCH`, and `ai18n.py --version` prints it next to the spec version.

@@ -12,9 +12,10 @@ We provide security updates for the following versions of our project:
 
 ## 🛡️ Security Practices
 
-- Policy files are data only: the schema admits fixed keys, language tags and globs with a restricted alphabet, so a policy file cannot carry instructions for a model.
+- Policy files are data only: the schema admits fixed keys, language tags, and globs and catalog patterns with a restricted alphabet, so a policy file cannot carry instructions for a model.
 - Engines inject the normalized rendering of a policy, never the raw file, so comments never reach a model.
 - An invalid policy is rejected as a whole and never resolved in part. A file with a repeated key, or larger than 64 KiB, is invalid.
+- Message catalogs are read only to be checked, never injected. A catalog larger than 5 MiB, nested more than 32 levels deep or with more than 100,000 entries is reported instead of read.
 - Every GitHub Action is pinned to a full commit SHA, and the workflows request only the permissions they use.
 - Dependencies are monitored and updated to address known vulnerabilities.
 
