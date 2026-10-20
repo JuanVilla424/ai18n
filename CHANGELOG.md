@@ -1,3 +1,9 @@
+## [1.0.4] - 2026-10-19
+
+### Bug Fixes
+
+- **core**: apply the development guidelines review to the resolver, dependencies and ci (`patch candidate`)
+
 ## [1.0.3] - 2026-10-19
 
 ### Bug Fixes

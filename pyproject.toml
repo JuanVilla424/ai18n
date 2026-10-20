@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ai18n"
-version = "1.0.3"
+version = "1.0.4"
 description = "ai18n: i18n for AI agents. One data-only file tells any AI which language to use for replies, voice, docs, code and instructions."
 authors = ["B <g46327wsj1.marbling129@passinbox.com>"]
 license = "Apache-2.0"
