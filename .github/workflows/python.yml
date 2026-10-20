@@ -3,6 +3,8 @@
 
 name: Python CI
 on: [push]
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,9 +12,9 @@ jobs:
       matrix:
         python-version: ["3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -20,8 +22,8 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install poetry
-          poetry lock
+          pip install poetry==2.5.1
+          poetry check --lock
           poetry install
       - name: Format check with Black
         run: |
@@ -31,6 +33,10 @@ jobs:
         run: |
           source venv/bin/activate
           pylint $(git ls-files '*.py')
+      - name: Type check with mypy
+        run: |
+          source venv/bin/activate
+          mypy
       - name: Run tests
         run: |
           source venv/bin/activate

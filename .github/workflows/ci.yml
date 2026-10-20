@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: '3.12'
       - name: Install dependencies
@@ -26,8 +26,8 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install poetry
-          poetry lock
+          pip install poetry==2.5.1
+          poetry check --lock
           poetry install
       - name: Format check with Black
         run: |
@@ -37,11 +37,14 @@ jobs:
         run: |
           source venv/bin/activate
           pylint $(git ls-files '*.py')
+      - name: Type check with mypy
+        run: |
+          source venv/bin/activate
+          mypy
       - name: Run tests
         run: |
           source venv/bin/activate
           pytest --cov=src --cov-report=xml:coverage.xml
-        continue-on-error: true
       - name: List files to verify coverage.xml
         run: |
           ls -la *.xml
@@ -49,7 +52,7 @@ jobs:
         continue-on-error: true
       - name: Upload coverage to Codecov
         if: success()
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac  # v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml

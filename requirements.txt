@@ -1,7 +1,8 @@
-# Runtime dependencies of the reference resolver (src/ai18n.py)
+# Runtime dependencies of the reference resolver (src/ai18n.py).
+# Exact pins, the same as pyproject.toml: tests/test_resolver.py keeps both in step.
 
 # PyYAML to read ai18n.yaml policy files
-PyYAML>=6.0
+PyYAML==6.0.3
 
 # jsonschema to validate policy files against schema/ai18n.schema.json
-jsonschema>=4.23.0
+jsonschema==4.26.0

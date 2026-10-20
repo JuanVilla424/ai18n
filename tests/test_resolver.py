@@ -4,6 +4,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,39 @@ def test_this_repository_uses_its_own_standard():
     assert ai18n.resolve(ROOT / "src" / "ai18n.py") == ("code", "en")
 
 
+def test_the_schema_the_resolver_and_the_docs_agree():
+    """The schema, the resolver, the spec and the skill name the same surfaces and rules."""
+    schema = json.loads(ai18n.SCHEMA_FILE.read_text(encoding="utf-8"))
+    assert schema["properties"]["ai18n"]["const"] == ai18n.SPEC_VERSION
+    assert schema["$defs"]["rule"]["properties"]["surface"]["enum"] == list(ai18n.SURFACES)
+    assert set(schema["properties"]) == {*ai18n.SURFACES, "ui", "default", "paths", "ai18n"}
+    spec = (ROOT / "SPEC.md").read_text(encoding="utf-8")
+    skill = (ROOT / "skills" / "ai18n" / "SKILL.md").read_text(encoding="utf-8")
+    for surface in [*ai18n.SURFACES, "ui"]:
+        assert f"`{surface}`" in spec and f"`{surface}`" in skill
+    for suffix in ai18n.DOC_SUFFIXES:
+        assert f"`{suffix}`" in spec and f"`{suffix}`" in skill
+    for name in ai18n.TECHNICAL_TXT_NAMES:
+        assert f"`{name}`" in spec and f"`{name}`" in skill
+    assert f"{ai18n.MAX_POLICY_BYTES // 1024} KiB" in spec
+
+
+def test_the_requirements_files_pin_what_pyproject_pins():
+    """pip and poetry install the same exact versions: one set of pins, written twice."""
+    poetry = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["poetry"]
+    declared = {**poetry["dependencies"], **poetry["group"]["dev"]["dependencies"]}
+    declared.pop("python")
+    pins = {}
+    for name in ("requirements.txt", "requirements.dev.txt"):
+        for line in (ROOT / name).read_text(encoding="utf-8").splitlines():
+            requirement = line.split("#")[0].strip()
+            if requirement:
+                package, version = requirement.split("==")
+                pins[package.lower()] = version
+    assert pins.pop("poetry"), "poetry reads pyproject.toml: it is pinned only for pip setups"
+    assert pins == {package.lower(): version for package, version in declared.items()}
+
+
 @pytest.mark.parametrize("example", ["v0", "v1", "monorepo", "monorepo/services/billing"])
 def test_every_example_is_valid(example):
     """Every example policy validates."""
@@ -99,6 +133,17 @@ def test_glob_wildcards_follow_the_spec(tmp_path):
     assert ai18n.resolve(repo / "notes" / "x" / "a.py") == ("code", "en")
     assert ai18n.resolve(repo / "notes" / "todo.txt") == ("document", "fr")
     assert ai18n.resolve(repo / "notes" / "x" / "todo.txt") == ("document", None)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["requirements.txt", "requirements-dev.txt", "constraints.txt", "CMakeLists.txt", "robots.txt"],
+)
+def test_technical_txt_files_are_code(tmp_path, name):
+    """Well-known .txt files that hold build code or configuration resolve to `code`."""
+    repo = _repo(tmp_path, "ai18n: 1\ndocument: es\ncode: en\n")
+    assert ai18n.resolve(repo / name) == ("code", "en")
+    assert ai18n.resolve(repo / "notes.txt") == ("document", "es"), "other .txt files stay docs"
 
 
 def test_preserve_keeps_the_language_a_text_already_has(tmp_path):
@@ -231,6 +276,53 @@ def test_the_schema_rejects_anything_but_data(tmp_path, text):
     assert ai18n.check(repo)
 
 
+@pytest.mark.parametrize(
+    ("text", "line"),
+    [
+        ("ai18n: 1\ncode: en\ncode: es\n", 3),
+        ("ai18n: 1\npaths:\n  - match: ['*.md']\n    surface: code\n    surface: document\n", 5),
+    ],
+)
+def test_duplicate_keys_are_rejected_with_their_line(tmp_path, text, line):
+    """YAML would keep the last of two equal keys; a policy must never be ambiguous."""
+    repo = _repo(tmp_path, text)
+    problems = ai18n.check(repo)
+    assert problems and f"line {line}: duplicate key" in problems[0]
+    with pytest.raises(ai18n.PolicyError):
+        ai18n.resolve(repo / "x.py")
+
+
+def test_recursive_aliases_are_rejected_without_hanging(tmp_path):
+    """A cyclic YAML node graph ends in a clear error, never in an endless walk."""
+    assert ai18n.check(_repo(tmp_path, "ai18n: 1\nloop: &a [*a]\n"))
+
+
+def test_a_policy_bigger_than_the_limit_is_refused(tmp_path):
+    """A policy is a few lines of data; a huge file is refused before it is parsed."""
+    padding = "# padding\n" * (ai18n.MAX_POLICY_BYTES // 10 + 1)
+    problems = ai18n.check(_repo(tmp_path, "ai18n: 1\ncode: en\n" + padding))
+    assert problems and "bytes, more than the" in problems[0]
+
+
+def test_a_policy_that_is_not_utf8_is_refused(tmp_path):
+    """Undecodable bytes are a clear policy error, never a traceback."""
+    repo = _repo(tmp_path, "")
+    (repo / "ai18n.yaml").write_bytes(b"code: \xff\xfe\n")
+    problems = ai18n.check(repo)
+    assert problems and "not readable as UTF-8 YAML" in problems[0]
+
+
+def test_a_missing_schema_is_a_clear_error(tmp_path, monkeypatch, capsys):
+    """Without its schema the resolver says what is missing and how to fix it."""
+    repo = _repo(tmp_path, "ai18n: 1\ncode: en\n")
+    fresh = _load()  # its own, still empty, schema cache
+    monkeypatch.setattr(fresh, "SCHEMA_FILE", tmp_path / "missing.schema.json")
+    assert fresh.main(["check", "--root", str(repo)]) == 1
+    assert fresh.main(["show", "--root", str(repo)]) == 1
+    err = capsys.readouterr().err
+    assert "cannot load the ai18n schema" in err and "Traceback" not in err
+
+
 def test_an_empty_file_is_a_valid_empty_policy(tmp_path):
     """An empty policy file declares nothing."""
     repo = _repo(tmp_path, "")
@@ -257,8 +349,8 @@ def test_show_is_normalized_and_never_carries_comments(tmp_path):
     assert "must never reach a model" not in text
     for line in ("respond: es", "code: en", "instruct: en", "ui: delegate", "default: es"):
         assert line in text
-    assert "**/SKILL.md, **/skills/** -> instruct" in text
-    assert "third_party/** -> preserve" in text
+    assert "`**/SKILL.md`, `**/skills/**` -> instruct" in text, "globs are quoted as code"
+    assert "`third_party/**` -> preserve" in text
     assert "resolve <path>" in text
 
 
@@ -275,6 +367,7 @@ def test_show_json_is_the_same_normalized_policy_as_data(tmp_path):
     }
     assert data["ui"] == "delegate" and data["default"] == "es"
     assert data["paths"][1] == {"match": ["third_party/**"], "language": "preserve"}
+    assert "requirements*.txt" in data["content_rule"]["code_txt"]
     assert "must never reach a model" not in json.dumps(data)
 
 
