@@ -1,3 +1,9 @@
+## [1.0.7] - 2026-10-20
+
+### Bug Fixes
+
+- **core**: bump the github actions to their latest releases (`patch candidate`)
+
 ## [1.0.6] - 2026-10-20
 
 ### Features
