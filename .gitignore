@@ -10,9 +10,6 @@ package-lock.json*
 dist/
 *.tsbuildinfo
 
-# Poetry
-poetry.lock
-
 # Environment variables
 .env
 .env.*.local
