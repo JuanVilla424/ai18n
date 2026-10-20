@@ -1,3 +1,9 @@
+## [1.0.6] - 2026-10-20
+
+### Features
+
+- **core**: support product locales and message catalogs with check and init (`patch candidate`)
+
 ## [1.0.5] - 2026-10-19
 
 ### Bug Fixes

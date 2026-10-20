@@ -40,7 +40,7 @@ import yaml
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import best_match
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 SPEC_VERSION = 1
 SPEC_URL = "https://github.com/JuanVilla424/ai18n/blob/main/SPEC.md"
 SCHEMA_FILE = Path(__file__).resolve().parents[1] / "schema" / "ai18n.schema.json"
