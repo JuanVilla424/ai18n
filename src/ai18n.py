@@ -143,26 +143,51 @@ def _directories(start: Path) -> Iterator[Path]:
     directory = Path(os.path.abspath(start))
     while True:
         yield directory
-        if (directory / ".git").exists() or directory.parent == directory:
+        try:
+            at_root = (directory / ".git").exists() or directory.parent == directory
+        except OSError as exc:
+            raise PolicyError(_unreadable(exc)) from exc
+        if at_root:
             return
         directory = directory.parent
 
 
-def _directories_below(root: Path) -> Iterator[Path]:
-    """`root` and every directory under it, except tooling folders and nested repositories."""
-    for current, dirnames, _ in os.walk(os.path.abspath(root)):
+def _unreadable(error: OSError) -> str:
+    """The problem line for a directory a recursive check cannot read."""
+    return f"{error.filename}: cannot read it ({error.strerror}); fix its permissions or move it"
+
+
+def _directories_below(root: Path, problems: list[str]) -> Iterator[Path]:
+    """`root` and every directory under it, except tooling folders and nested repositories.
+
+    A directory that cannot be read is added to `problems` instead of being skipped in silence."""
+
+    def report(error: OSError) -> None:
+        problems.append(_unreadable(error))
+
+    for current, dirnames, _ in os.walk(os.path.abspath(root), onerror=report):
         here = Path(current)
-        dirnames[:] = sorted(
-            name
-            for name in dirnames
-            if name not in SKIP_DIRS and not (here / name / ".git").exists()
-        )
+        kept: list[str] = []
+        for name in sorted(dirnames):
+            if name in SKIP_DIRS:
+                continue
+            try:
+                nested_repository = (here / name / ".git").exists()
+            except OSError as exc:
+                report(exc)
+                continue
+            if not nested_repository:
+                kept.append(name)
+        dirnames[:] = kept
         yield here
 
 
 def _policy_files(directory: Path) -> list[Path]:
     """The policy files present in one directory, in precedence order."""
-    return [directory / name for name in POLICY_NAMES if (directory / name).is_file()]
+    try:
+        return [directory / name for name in POLICY_NAMES if (directory / name).is_file()]
+    except OSError as exc:
+        raise PolicyError(_unreadable(exc)) from exc
 
 
 def find_chain(start: Path) -> Chain:
@@ -330,13 +355,22 @@ def check(root: str | Path, recursive: bool = False) -> list[str]:
 
     With `recursive`, every policy file under `root` is checked too; nested repositories are
     skipped, because they carry and check their own policy."""
-    directories = list(_directories(Path(root)))
-    if recursive:
-        directories += [d for d in _directories_below(Path(root)) if d not in directories]
     problems: list[str] = []
+    try:
+        directories = list(_directories(Path(root)))
+    except PolicyError as exc:
+        return [str(exc)]
+    if recursive:
+        below = _directories_below(Path(root), problems)
+        directories += [d for d in below if d not in directories]
     for directory in directories:
-        files = _policy_files(directory)
-        if len(files) == 2 and not files[0].samefile(files[1]):
+        try:
+            files = _policy_files(directory)
+            ambiguous = len(files) == 2 and not files[0].samefile(files[1])
+        except (PolicyError, OSError) as exc:
+            problems.append(str(exc))
+            continue
+        if ambiguous:
             problems.append(
                 f"{directory}: ai18n.yaml and languages.yaml differ; keep one, or make "
                 "languages.yaml an alias of ai18n.yaml"
@@ -347,6 +381,13 @@ def check(root: str | Path, recursive: bool = False) -> list[str]:
             except PolicyError as exc:
                 problems.append(str(exc))
     return problems
+
+
+def _existing_dir(value: str) -> str:
+    """An argparse type: the directory must exist, so a typo is an error instead of `valid`."""
+    if not os.path.isdir(value):
+        raise argparse.ArgumentTypeError(f"directory not found: {value}")
+    return value
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -369,51 +410,64 @@ def _parser() -> argparse.ArgumentParser:
     resolve_cmd.add_argument(
         "--session",
         default=".",
+        type=_existing_dir,
         help="repository whose policy applies when the file has none (default: current directory)",
     )
     resolve_cmd.add_argument("--json", action="store_true", help="print one JSON object")
     root_help = "directory to start from (default: current directory)"
     check_cmd = commands.add_parser("check", help="validate the policy files of a repository")
-    check_cmd.add_argument("--root", default=".", help=root_help)
+    check_cmd.add_argument("--root", default=".", type=_existing_dir, help=root_help)
     check_cmd.add_argument(
         "--recursive",
         action="store_true",
         help="also check every policy file under the root, skipping nested repositories",
     )
     show_cmd = commands.add_parser("show", help="print the normalized policy, ready to inject")
-    show_cmd.add_argument("--root", default=".", help=root_help)
+    show_cmd.add_argument("--root", default=".", type=_existing_dir, help=root_help)
     show_cmd.add_argument(
         "--format", choices=("text", "json"), default="text", help="text (default) or JSON"
     )
     return parser
 
 
+def _run_resolve(args: argparse.Namespace) -> int:
+    """`resolve`: the surface and language of a file, or the language of a surface."""
+    if args.surface:
+        surface, language = args.surface, surface_language(args.surface, args.session)
+    else:
+        surface, language = resolve(args.path, args.session)
+    if args.json:
+        print(json.dumps({"surface": surface, "language": language}))
+    else:
+        print(f"{surface} {language or 'unset'}")
+    return 0
+
+
+def _run_check(args: argparse.Namespace) -> int:
+    """`check`: every problem goes to stderr, and the exit code says whether there was one."""
+    problems = check(args.root, recursive=args.recursive)
+    for problem in problems:
+        print(f"ai18n: {problem}", file=sys.stderr)
+    if not problems:
+        print("ai18n: valid")
+    return 1 if problems else 0
+
+
+def _run_show(args: argparse.Namespace) -> int:
+    """`show`: the normalized policy, as text or JSON."""
+    print(show(args.root, args.format), end="")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run the command line; 0 on success, 1 when a policy or the schema is invalid."""
+    """Run the command line: 0 on success, 1 when a policy or the schema is invalid, 2 on misuse."""
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command == "resolve" and (args.path is None) == (args.surface is None):
+        parser.error("resolve takes a path or --surface, exactly one")
+    runners = {"resolve": _run_resolve, "check": _run_check, "show": _run_show}
     try:
-        if args.command == "resolve":
-            if (args.path is None) == (args.surface is None):
-                parser.error("resolve takes a path or --surface, exactly one")
-            if args.surface:
-                surface, language = args.surface, surface_language(args.surface, args.session)
-            else:
-                surface, language = resolve(args.path, args.session)
-            if args.json:
-                print(json.dumps({"surface": surface, "language": language}))
-            else:
-                print(f"{surface} {language or 'unset'}")
-            return 0
-        if args.command == "check":
-            problems = check(args.root, recursive=args.recursive)
-            for problem in problems:
-                print(f"ai18n: {problem}", file=sys.stderr)
-            if not problems:
-                print("ai18n: valid")
-            return 1 if problems else 0
-        print(show(args.root, args.format), end="")
-        return 0
+        return runners[args.command](args)
     except PolicyError as exc:
         print(f"ai18n: {exc}", file=sys.stderr)
         return 1

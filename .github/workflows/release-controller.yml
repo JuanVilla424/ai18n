@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   release:
@@ -25,6 +24,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Generate Release Notes
         id: release_notes
         run: |
@@ -117,7 +117,7 @@ jobs:
         run: |
           zip -r "${REPO_NAME}-${GITHUB_REF_NAME}.zip" \
             {INSTALL,SECURITY,README,SPEC,CONTRIBUTING,CODE_OF_CONDUCT,AGENTS}.md \
-            requirements.txt requirements.dev.txt ai18n.yaml .github \
+            requirements.txt requirements.dev.txt poetry.lock ai18n.yaml .github \
             schema src skills examples pyproject.toml LICENSE
         env:
           REPO_NAME: ${{ env.REPO_NAME }}
