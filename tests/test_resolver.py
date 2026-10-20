@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tomllib
@@ -75,6 +76,15 @@ def test_the_schema_the_resolver_and_the_docs_agree():
     for name in ai18n.TECHNICAL_TXT_NAMES:
         assert f"`{name}`" in spec and f"`{name}`" in skill
     assert f"{ai18n.MAX_POLICY_BYTES // 1024} KiB" in spec
+
+
+def test_the_readme_json_example_is_what_show_prints(tmp_path):
+    """The README documents the real JSON rendering of the policy shown at its top."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    policy = readme.split("```yaml\n", 1)[1].split("```", 1)[0]
+    documented = json.loads(readme.split("```json\n", 1)[1].split("```", 1)[0])
+    rendered = ai18n.normalized(ai18n.find_chain(_repo(tmp_path, policy)), "src/ai18n.py")
+    assert rendered == documented
 
 
 def test_the_requirements_files_pin_what_pyproject_pins():
@@ -234,7 +244,7 @@ def test_norwegian_must_be_quoted(tmp_path):
 
 
 def test_a_recursive_check_finds_nested_policies_but_skips_other_repositories(tmp_path):
-    """`check --recursive` validates nested policies, never other repositories or tooling folders."""
+    """`check --recursive` validates nested policies, never other repositories or tooling."""
     repo = _repo(tmp_path, V1)
     team = repo / "services" / "billing"
     team.mkdir(parents=True)
@@ -248,6 +258,28 @@ def test_a_recursive_check_finds_nested_policies_but_skips_other_repositories(tm
     (repo / "node_modules" / "pkg").mkdir(parents=True)
     (repo / "node_modules" / "pkg" / "ai18n.yaml").write_text("not: valid\n", encoding="utf-8")
     assert not ai18n.check(repo, recursive=True)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any directory, whatever its mode")
+def test_an_unreadable_directory_is_reported_instead_of_skipped(tmp_path):
+    """A directory the check cannot read is a problem, never a silent gap or a traceback."""
+    repo = _repo(tmp_path, V1)
+    locked = repo / "locked"
+    locked.mkdir()
+    (locked / "ai18n.yaml").write_text("code: english\n", encoding="utf-8")
+    alias = _repo(tmp_path, "ai18n: 1\ncode: en\n", folder="alias")
+    (alias / "languages.yaml").symlink_to(locked / "ai18n.yaml")  # an alias nobody can read
+    locked.chmod(0)
+    try:
+        below = ai18n.check(repo, recursive=True)
+        inside = ai18n.check(locked)
+        through_alias = ai18n.check(alias)
+        with pytest.raises(ai18n.PolicyError, match="cannot read it"):
+            ai18n.resolve(locked / "inner" / "x.py")
+    finally:
+        locked.chmod(0o755)
+    for problems in (below, inside, through_alias):
+        assert any("cannot read it" in problem for problem in problems)
 
 
 # ── the schema only admits data ────────────────────────────────────────────────
@@ -412,6 +444,23 @@ def test_cli_resolve_needs_exactly_one_target():
     """`resolve` takes a path or --surface, never neither."""
     with pytest.raises(SystemExit):
         ai18n.main(["resolve"])
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["check", "--root", "{missing}"],
+        ["show", "--root", "{missing}"],
+        ["resolve", "--surface", "respond", "--session", "{missing}"],
+    ],
+)
+def test_a_directory_that_does_not_exist_is_a_usage_error(tmp_path, capsys, argv):
+    """A typo in --root or --session fails with exit code 2 instead of reporting `valid`."""
+    missing = str(tmp_path / "typo")
+    with pytest.raises(SystemExit) as done:
+        ai18n.main([arg.format(missing=missing) for arg in argv])
+    assert done.value.code == 2
+    assert "directory not found" in capsys.readouterr().err
 
 
 def test_cli_check_and_show_exit_codes(tmp_path, capsys):

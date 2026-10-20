@@ -1,3 +1,9 @@
+## [1.0.5] - 2026-10-19
+
+### Bug Fixes
+
+- **core**: harden the resolver cli and the ci for the development guidelines (`patch candidate`)
+
 ## [1.0.4] - 2026-10-19
 
 ### Bug Fixes

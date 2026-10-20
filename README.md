@@ -37,6 +37,8 @@ paths:
   - [Pre-Commit Hooks](#-pre-commit-hooks)
 - [Usage](#-usage)
   - [Resolver CLI](#-resolver-cli)
+  - [Exit codes](#-exit-codes)
+  - [JSON rendering](#-json-rendering)
   - [Integrations](#-integrations)
   - [Adoption checklist](#-adoption-checklist)
 - [FAQ](#-faq)
@@ -185,6 +187,64 @@ python3 src/ai18n.py --version                           # resolver and spec ver
   With `--recursive` it also checks every policy under the root, and skips nested repositories.
 - `show` renders the values of the policy with fixed wording, so no comment of the file reaches a
   model.
+
+### 🚦 Exit codes
+
+| Code | Meaning                                                                         |
+| ---- | ------------------------------------------------------------------------------- |
+| `0`  | Success: the file resolved, the policies are valid, or the policy was rendered. |
+| `1`  | A policy file, a directory or the schema is invalid or cannot be read.          |
+| `2`  | Usage error, such as a missing argument or a `--root` that does not exist.      |
+
+### 🧾 JSON rendering
+
+`show --format json` gives engines the normalized policy as data. For the policy at the top of
+this README it prints:
+
+```json
+{
+  "ai18n": 1,
+  "policy": true,
+  "spec": "https://github.com/JuanVilla424/ai18n/blob/main/SPEC.md",
+  "surfaces": {
+    "respond": "es",
+    "speak": "es",
+    "document": "es",
+    "code": "en",
+    "instruct": "en"
+  },
+  "ui": "delegate",
+  "default": "es",
+  "paths": [
+    { "match": ["**/SKILL.md", "**/skills/**"], "surface": "instruct" }
+  ],
+  "content_rule": {
+    "document": [".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc"],
+    "code_txt": [
+      "CMakeLists.txt",
+      "robots.txt",
+      "requirements*.txt",
+      "constraints*.txt"
+    ],
+    "code": "any other file"
+  },
+  "resolve": "python3 src/ai18n.py resolve <path>"
+}
+```
+
+| Field          | Meaning                                                                        |
+| -------------- | ------------------------------------------------------------------------------ |
+| `ai18n`        | The spec version of the rendering.                                             |
+| `policy`       | `false` when no policy applies; then `ai18n` and `policy` are the only fields. |
+| `surfaces`     | The effective language of every surface that resolves to one.                  |
+| `ui`           | A language tag, or `delegate`.                                                 |
+| `default`      | The nearest `default`, or `null`.                                              |
+| `paths`        | The path rules, in the order they are tried.                                   |
+| `content_rule` | The documentation suffixes, the technical `.txt` files and the rest.           |
+| `resolve`      | The command that resolves one file, relative to the root.                      |
+
+Within spec version 1 these fields keep their meaning, and new fields may be added. A consumer
+should ignore fields it does not know.
 
 ### 🔌 Integrations
 
