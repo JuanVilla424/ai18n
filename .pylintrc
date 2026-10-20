@@ -429,21 +429,9 @@ confidence=HIGH,
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use "--disable=all --enable=classes
 # --disable=W".
-disable=missing-module-docstring,
-        invalid-name,
-        too-few-public-methods,
-        E1101,
-        C0115,
-        duplicate-code,
-        raise-missing-from,
-        wrong-import-order,
-        ungrouped-imports,
-        reimported,
-        too-many-locals,
-        missing-timeout,
-        broad-exception-caught,
-        broad-exception-raised,
-        line-too-long
+#
+# This repository disables nothing beyond pylint's own defaults: the code passes every default
+# check, and a new exception needs a reason in review (development guideline 25).
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

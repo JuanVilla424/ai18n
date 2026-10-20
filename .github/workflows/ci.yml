@@ -1,5 +1,8 @@
 ---
 # .github/workflows/ci.yml
+#
+# Coverage of main for Codecov. Formatting, lint, types, tests and the policy check run in
+# python.yml on every push, main included, so this workflow does only what nothing else does.
 
 name: CI
 
@@ -12,11 +15,13 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  coverage:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
@@ -29,33 +34,16 @@ jobs:
           pip install poetry==2.5.1
           poetry check --lock
           poetry install
-      - name: Format check with Black
-        run: |
-          source venv/bin/activate
-          black --check src/ tests/
-      - name: Lint with Pylint
-        run: |
-          source venv/bin/activate
-          pylint $(git ls-files '*.py')
-      - name: Type check with mypy
-        run: |
-          source venv/bin/activate
-          mypy
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           source venv/bin/activate
           pytest --cov=src --cov-report=xml:coverage.xml
-      - name: List files to verify coverage.xml
-        run: |
-          ls -la *.xml
-          cat *.xml
-        continue-on-error: true
       - name: Upload coverage to Codecov
-        if: success()
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac  # v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           flags: unittests
           name: codecov-umbrella
+        # an outage of the external Codecov service must not mark a correct main as failed
         continue-on-error: true
