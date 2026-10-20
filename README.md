@@ -22,6 +22,11 @@ ui: delegate # UI strings belong to each app's own i18n
 paths:
   - match: ["**/SKILL.md", "**/skills/**"]
     surface: instruct
+i18n: # the product ships Spanish, English and Brazilian Portuguese
+  source: es
+  locales: [es, en, pt-BR]
+  fallback: en
+  catalogs: ["src/locales/{locale}.json"]
 ```
 
 ## 📚 Table of Contents
@@ -36,6 +41,7 @@ paths:
   - [Environment Setup](#-environment-setup)
   - [Pre-Commit Hooks](#-pre-commit-hooks)
 - [Usage](#-usage)
+  - [Start a new project](#-start-a-new-project)
   - [Resolver CLI](#-resolver-cli)
   - [Exit codes](#-exit-codes)
   - [JSON rendering](#-json-rendering)
@@ -62,6 +68,9 @@ that any AI and any tool can follow.
 - **Real language tags:** `en`, `es`, `pt-BR`, `zh-Hant` or `es-419`, a canonical subset of BCP 47.
 - **Path rules:** assign a surface or a language to any glob, such as skills or vendored code.
 - **`preserve`:** marks text that keeps its original language and must never be translated.
+- **Product locales:** declare the locales a product ships and where its message catalogs live.
+  Each catalog resolves to its own locale, and `check` keeps every catalog in step with the source.
+- **`init`:** writes the first policy of a new project, and never overwrites one.
 - **Cascade:** like EditorConfig, a subproject can override only the keys it needs.
 - **Version 0 compatible:** a classic `languages.yaml` with four keys is already valid ai18n.
 - **Data only:** a JSON Schema admits fixed keys, language tags and globs, so prose cannot hide in a
@@ -83,20 +92,28 @@ that any AI and any tool can follow.
 | `ui`       | language tag, `delegate` | user-facing UI text; `delegate` leaves it to each app's i18n            |
 | `default`  | language tag             | any surface the same file does not declare                              |
 | `paths`    | rules                    | globs mapped to a `surface`, or to a `language` such as `preserve`      |
+| `i18n`     | mapping                  | the locales the product ships, and where its message catalogs live      |
 
 A language tag is a language code with an optional script and region, in canonical case: `en`,
 `pt-BR`, `zh-Hant`, `es-419`. Quote Norwegian as `"no"`, because YAML 1.1 reads a bare `no` as
 false. The normative rules live in [SPEC.md](SPEC.md), and the schema in
 [schema/ai18n.schema.json](schema/ai18n.schema.json).
 
+The `i18n` block describes the product: `source` is the locale where new strings are written
+first, `locales` lists every locale the product ships, `fallback` is the locale shown when a key
+is missing, and `catalogs` holds patterns such as `src/locales/{locale}.json`, where `{locale}`
+stands for each locale.
+
 ## 🧭 How an AI resolves a language
 
 1. Walk up from the file to the repository root and collect every `ai18n.yaml`, nearest first.
 2. The first matching path rule wins.
-3. Otherwise documentation files are `document`, and any other file is `code`, including technical
+3. Otherwise a message catalog of the nearest `i18n` block is `ui` text in its own locale:
+   `src/locales/pt-BR.json` is written in `pt-BR`.
+4. Otherwise documentation files are `document`, and any other file is `code`, including technical
    `.txt` files such as `requirements.txt` or `CMakeLists.txt`.
-4. For that surface, the nearest policy that declares it, or declares a `default`, decides.
-5. Without a policy of its own, a file follows the policy of the repository the AI works from.
+5. For that surface, the nearest policy that declares it, or declares a `default`, decides.
+6. Without a policy of its own, a file follows the policy of the repository the AI works from.
 
 The policy wins over any other instruction about languages, and it changes languages only.
 
@@ -168,33 +185,80 @@ pre-commit run --all-files
 
 ## 🛠️ Usage
 
+### 🆕 Start a new project
+
+1. **Vendor the resolver** as a submodule, as in [Installation](#-installation):
+
+   ```bash
+   git submodule add -b dev https://github.com/JuanVilla424/ai18n.git helpers/ai18n
+   ```
+
+2. **Write the policy.** `init` writes a first `ai18n.yaml` with every tag in quotes, UI text
+   delegated, skills written in the `instruct` language and, with `--locales`, the `i18n` block.
+   It never overwrites a policy. `--agents-md` adds the AGENTS.md line of the
+   [integrations](#-integrations) once; without it, `init` prints the line.
+
+   ```bash
+   python3 helpers/ai18n/src/ai18n.py init --language es --locales es,en,pt-BR \
+     --fallback en --catalog "src/locales/{locale}.json" --agents-md
+   ```
+
+   | Option        | Default          | Writes                                              |
+   | ------------- | ---------------- | --------------------------------------------------- |
+   | `--root`      | `.`              | where `ai18n.yaml` goes                             |
+   | `--language`  | `en`             | `default`: replies, talk and documentation          |
+   | `--code`      | `en`             | `code`                                              |
+   | `--instruct`  | `en`             | `instruct`                                          |
+   | `--locales`   | none             | `i18n.locales`; without it there is no `i18n` block |
+   | `--source`    | the first locale | `i18n.source`                                       |
+   | `--fallback`  | none             | `i18n.fallback`                                     |
+   | `--catalog`   | none             | `i18n.catalogs`; repeat it for several patterns     |
+   | `--agents-md` | off              | the AGENTS.md line, added once                      |
+
+3. **Create the catalogs**, one per locale, with the same keys and placeholders. Write each new
+   string in the `source` catalog first. [`examples/web-app`](examples/web-app) has a complete set
+   in `es`, `en` and `pt-BR`, with placeholders and an ICU plural.
+4. **Inject and teach.** Give every session the output of `show`, and install the skill, as the
+   [integrations](#-integrations) show.
+5. **Validate.** Run `check --recursive` in pre-commit and CI. It checks the policy and every
+   catalog.
+
 ### 🧰 Resolver CLI
 
 With the policy shown at the top of this README:
 
 ```bash
 python3 src/ai18n.py resolve .claude/skills/x/SKILL.md   # instruct en
+python3 src/ai18n.py resolve src/locales/pt-BR.json      # ui pt-BR
 python3 src/ai18n.py resolve --surface respond --json    # {"surface": "respond", "language": "es"}
 python3 src/ai18n.py check                               # validate the policies that apply here
 python3 src/ai18n.py check --recursive                   # validate every policy in the repository
 python3 src/ai18n.py show                                # normalized policy as text, ready to inject
 python3 src/ai18n.py show --format json                  # the same policy as JSON
+python3 src/ai18n.py init --locales es,en,pt-BR          # write the first policy of a project
 python3 src/ai18n.py --version                           # resolver and spec versions
 ```
 
-- `resolve` prints the surface and the language of a file, or `unset` when no policy applies.
-- `check` exits with 1 when a policy file is invalid or two policy files in one directory differ.
-  With `--recursive` it also checks every policy under the root, and skips nested repositories.
+- `resolve` prints the surface and the language of a file, or `unset` when no policy applies. A
+  message catalog is `ui` text in its own locale.
+- `check` exits with 1 when a policy file is invalid, two policy files in one directory differ, or
+  a message catalog is out of step with its source. With `--recursive` it also checks every policy
+  under the root, and skips nested repositories.
+- `check` reports missing or extra catalogs and keys, empty messages, repeated keys and
+  placeholders that differ from the source. It validates JSON, ARB and YAML catalogs, and notes
+  without failing the formats it does not validate, such as `.po`.
 - `show` renders the values of the policy with fixed wording, so no comment of the file reaches a
   model.
+- `init` writes the first `ai18n.yaml` of a project, as [Start a new project](#-start-a-new-project)
+  shows.
 
 ### 🚦 Exit codes
 
-| Code | Meaning                                                                         |
-| ---- | ------------------------------------------------------------------------------- |
-| `0`  | Success: the file resolved, the policies are valid, or the policy was rendered. |
-| `1`  | A policy file, a directory or the schema is invalid or cannot be read.          |
-| `2`  | Usage error, such as a missing argument or a `--root` that does not exist.      |
+| Code | Meaning                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------ |
+| `0`  | Success: the file resolved, the policies and catalogs are valid, the policy was rendered or written.               |
+| `1`  | A policy file, a message catalog, a directory or the schema is invalid or cannot be read, or `init` did not write. |
+| `2`  | Usage error, such as a missing argument or a `--root` that does not exist.                                         |
 
 ### 🧾 JSON rendering
 
@@ -218,6 +282,12 @@ this README it prints:
   "paths": [
     { "match": ["**/SKILL.md", "**/skills/**"], "surface": "instruct" }
   ],
+  "i18n": {
+    "source": "es",
+    "locales": ["es", "en", "pt-BR"],
+    "fallback": "en",
+    "catalogs": ["src/locales/{locale}.json"]
+  },
   "content_rule": {
     "document": [".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc"],
     "code_txt": [
@@ -240,6 +310,7 @@ this README it prints:
 | `ui`           | A language tag, or `delegate`.                                                 |
 | `default`      | The nearest `default`, or `null`.                                              |
 | `paths`        | The path rules, in the order they are tried.                                   |
+| `i18n`         | The nearest `i18n` block with all four keys, or `null` when none applies.      |
 | `content_rule` | The documentation suffixes, the technical `.txt` files and the rest.           |
 | `resolve`      | The command that resolves one file, relative to the root.                      |
 
@@ -285,7 +356,8 @@ and `python3 helpers/ai18n/src/ai18n.py resolve <path>` prints the surface and l
 **Agent Skills.** Copy [`skills/ai18n`](skills/ai18n/SKILL.md) to a folder your engines scan, such
 as `~/.claude/skills/ai18n/`. Claude Code and OpenCode both read that folder.
 
-**pre-commit.** Validate every policy file before each commit:
+**pre-commit.** Validate every policy file, and the catalogs under `src/locales/`, before each
+commit:
 
 ```yaml
 repos:
@@ -296,7 +368,7 @@ repos:
         entry: python3 helpers/ai18n/src/ai18n.py check --recursive
         language: system
         pass_filenames: false
-        files: (^|/)(ai18n|languages)\.yaml$
+        files: (^|/)(ai18n|languages)\.yaml$|^src/locales/
 ```
 
 **CI.** Run the same check in your pipeline:
@@ -311,21 +383,23 @@ repos:
 
 ### ✅ Adoption checklist
 
-1. **Declare.** Add `ai18n.yaml` at the root. A classic `languages.yaml` keeps working, and it can
-   become a symbolic link to `ai18n.yaml`.
+1. **Declare.** Add `ai18n.yaml` at the root, or let `init` write it. A classic `languages.yaml`
+   keeps working, and it can become a symbolic link to `ai18n.yaml`.
 2. **Point.** Add the `AGENTS.md` line above.
 3. **Inject.** Give every session the output of `show`, never the raw file.
 4. **Teach.** Install the `ai18n` skill where your engines load skills.
-5. **Verify.** Run `check --recursive` in pre-commit or CI, and have your write checks compare the
-   language of new text with `resolve <path>`.
+5. **Verify.** Run `check --recursive` in pre-commit or CI, which also checks the message catalogs,
+   and have your write checks compare the language of new text with `resolve <path>`.
 
-These steps map to the conformance levels of [SPEC.md](SPEC.md#11-conformance): declare, inject and
+These steps map to the conformance levels of [SPEC.md](SPEC.md#12-conformance): declare, inject and
 verify.
 
 ## ❓ FAQ
 
 **Does ai18n translate anything?** No. It tells an AI which language to write in. Translating the
-text of a product stays with that product's i18n, which is why `ui` defaults to `delegate`.
+text of a product stays with that product's i18n, which is why `ui` defaults to `delegate`. The
+`i18n` block tells the AI which locales the product ships and where their catalogs live, and
+`check` keeps those catalogs in step with the source locale.
 
 **How does it relate to `AGENTS.md`?** `AGENTS.md` holds prose instructions for agents. ai18n is the
 data that `AGENTS.md` points to, so one line there is enough.
@@ -340,7 +414,7 @@ the language it already uses.
 keys it declares and inherits the rest.
 
 **Is the reference resolver required?** No. Any implementation of the resolution rules in
-[SPEC.md](SPEC.md#7-resolution) conforms. The resolver is the reference, and its tests show the
+[SPEC.md](SPEC.md#8-resolution) conforms. The resolver is the reference, and its tests show the
 expected behavior.
 
 ## 🔒 Security model
@@ -348,7 +422,8 @@ expected behavior.
 Instruction files for AI agents are a prompt-injection vector, so ai18n keeps its own file inert.
 The schema only admits data, engines inject the normalized rendering instead of the raw file, and a
 policy can change languages only. A file with a repeated key, or larger than 64 KiB, is refused,
-and an invalid policy is rejected as a whole, never resolved in part.
+and an invalid policy is rejected as a whole, never resolved in part. Message catalogs are only
+read to be checked, never injected, and a catalog larger than 5 MiB is a problem.
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## 🗂️ Repository layout
@@ -358,7 +433,7 @@ SPEC.md                    the normative specification
 schema/ai18n.schema.json   JSON Schema (draft 2020-12) of a policy file
 src/ai18n.py               reference resolver and CLI
 skills/ai18n/SKILL.md      portable Agent Skill with the resolution rules
-examples/                  version 0, version 1 and monorepo policies
+examples/                  version 0, version 1, monorepo and web app examples
 tests/                     tests of the resolver, the schema and the examples
 ai18n.yaml                 this repository's own policy
 ```
